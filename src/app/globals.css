@@ -1,26 +1,104 @@
 @import "tailwindcss";
 
+/* Só tema claro. Contraste AA (texto >= 4.5:1). */
+@theme {
+  --color-fundo: #ffffff;
+  --color-superficie: #f5f6f8;
+  --color-texto: #14161a;
+  --color-texto-suave: #4a5058;
+  --color-borda: #c9ced6;
+
+  /* Uma cor de ação */
+  --color-acao: #0b4f9c;
+  --color-acao-escura: #083a73;
+  --color-sobre-acao: #ffffff;
+
+  /* Tons dos selos (nunca só cor: sempre texto + ícone) */
+  --color-tom-neutro-fundo: #eceef1;
+  --color-tom-neutro-texto: #2b3038;
+  --color-tom-andamento-fundo: #e3eefb;
+  --color-tom-andamento-texto: #0a3d7a;
+  --color-tom-sucesso-fundo: #e2f3e6;
+  --color-tom-sucesso-texto: #0f5a24;
+  --color-tom-encerrado-fundo: #f6e9dc;
+  --color-tom-encerrado-texto: #6b3a0c;
+
+  --color-aviso-fundo: #fff4c2;
+  --color-aviso-texto: #3d3000;
+
+  --font-sans:
+    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+html {
+  font-size: 18px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Em @layer base: estilo fora de camada vence as utilitárias do Tailwind (ex.: text-white no chip ativo). */
+@layer base {
+body {
+  background: var(--color-fundo);
+  color: var(--color-texto);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+}
+
+/* Títulos: 24px (h2) e 32px (h1) em telas médias; menores no celular estreito */
+h1 {
+  font-size: 1.75rem;
+  line-height: 1.25;
+  font-weight: 700;
+}
+h2 {
+  font-size: 1.35rem;
+  line-height: 1.3;
+  font-weight: 700;
+}
+@media (min-width: 40rem) {
+  h1 {
+    font-size: 2rem;
+  }
+  h2 {
+    font-size: 1.5rem;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+a {
+  color: var(--color-acao);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+a:hover {
+  color: var(--color-acao-escura);
+}
+
+/* Foco visível forte */
+:focus-visible {
+  outline: 3px solid var(--color-acao);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* Alvos de toque mínimos de 48px */
+a,
+button,
+input,
+select,
+summary {
+  min-block-size: 48px;
+}
+a {
+  display: inline-flex;
+  align-items: center;
+}
+/* Links dentro de texto corrido não viram bloco */
+p a {
+  display: inline;
+  min-block-size: 0;
+}
 }

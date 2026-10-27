@@ -11,6 +11,9 @@ Migrações em ordem. Descrição das tabelas e dos estados em [`../docs/modelo-
 | `005_storage.sql` | Buckets (só no Supabase) |
 | `006_seed_categorias.sql` | Categorias; municípios vêm da API do IBGE |
 | `007_lacunas_do_desenho.sql` | Idempotência, fotos, direito de resposta, limite de taxa, retenção (com `pg_cron`), sinais de triagem, fila de moderação |
+| `008_seed_municipios.sql` | Os 246 municípios de Goiás (IBGE); idempotente, vai também para produção |
+| `009_view_sem_busca.sql` | `v_ocorrencias_publicas` deixa de expor a coluna `busca`; a lista permitida de colunas públicas fica em `colunas-publicas.json` e é conferida por teste |
+| `seed/staging_ficticio.sql` | Dados fictícios **só para staging** (trava aborta se houver dado real) |
 | `tests/` | Stub do Supabase, testes de segurança (`rls_test.sql`, `migracao_007_test.sql`) e executor |
 
 ### Funções do servidor (`service_role`) — contrato resumido
@@ -61,6 +64,17 @@ repetir os testes no projeto Supabase real e fazer um teste de invasão básico 
 | `authenticated_security_definer_function_executable` (7 funções `admin_*`) | Intencional: o painel chama essas funções com a sessão do admin, e cada uma exige papel dentro do corpo. Sem papel, nada acontece (testado) |
 
 Observação: o teste de matriz de execução no Supabase real acusa 1 função (`rls_auto_enable`), que é do próprio Supabase e não do projeto.
+
+## Dados de teste
+- `008_seed_municipios.sql`: os 246 municípios de Goiás (dado público do IBGE). Gerado por `node scripts/gerar-seed-municipios.mjs` (falha se a contagem não for 246) e versionado. Idempotente; este vai também para produção.
+- `seed/staging_ficticio.sql`: 28 ocorrências **fictícias** (24 publicadas, 4 não publicadas) em 4 municípios, com linha do tempo, respostas oficiais e resolvidas com evidência. Idempotente (protocolos `TESTE-NNN`).
+- Aplicar no staging (nessa ordem, depois de 001 a 007):
+```bash
+npx supabase db query --linked --project-ref <ref-staging> -f db/008_seed_municipios.sql
+npx supabase db query --linked --project-ref <ref-staging> -f db/seed/staging_ficticio.sql
+```
+- **Nunca aplicar `seed/staging_ficticio.sql` em produção.** Ele tem uma trava que aborta se existir qualquer ocorrência que não seja de teste, mas não dependa só dela.
+- Testado em `db/tests/seed_test.sql` (rodado por `npm run db:test`, num banco novo, incluindo reexecução e a trava).
 
 ## Pontos de atenção ao implementar
 - Nunca usar a chave `service_role` no navegador; só nas Edge Functions.

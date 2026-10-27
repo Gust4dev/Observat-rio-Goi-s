@@ -20,6 +20,8 @@ Este repositório é **público**. Nunca commitar chaves, `.env*`, dados reais d
 ## Índice
 | Documento | Conteúdo |
 |---|---|
+| [`docs/estrutura-do-sistema.md`](docs/estrutura-do-sistema.md) | Mapa mestre: pilares do sistema, o que existe, o que falta, frontend ↔ backend |
+| [`docs/design.md`](docs/design.md) | Tokens, componentes, wireframes por rota, acessibilidade, vocabulário |
 | [`docs/visao-geral.md`](docs/visao-geral.md) | Objetivo, módulos, escopo do MVP, fora de escopo |
 | [`docs/desenho-geral.md`](docs/desenho-geral.md) | Como o sistema funciona: endpoints, fluxos, admin, rotinas, ordem de construção |
 | [`docs/arquitetura.md`](docs/arquitetura.md) | Stack, camadas, separação público/privado |
