@@ -29,6 +29,7 @@ describe("detalhe público", () => {
   });
   it("metadata mantém estado honesto e canonical público", async () => {
     const meta = await generateMetadata(props);
+    expect(meta.twitter).toMatchObject({ title: "Rua sem luz", images: [{ url: "/opengraph-image.png", alt: "Observatório Goiás" }] });
     expect(meta.description).toContain("Resolução sem documentação");
     expect(meta.alternates?.canonical).toBe(`https://observatorio.example/problema/${id}`);
     expect(JSON.stringify(meta)).not.toContain("GO-123");
@@ -58,6 +59,11 @@ it("gera PNG neutro 1200 por 630 para o relato público", async () => {
   expect(png.subarray(1, 4).toString()).toBe("PNG");
   expect(png.readUInt32BE(16)).toBe(1200);
   expect(png.readUInt32BE(20)).toBe(630);
+  const sharp = (await import("sharp")).default;
+  const actual = await sharp(png).extract({ left: 80, top: 64, width: 64, height: 64 }).removeAlpha().raw().toBuffer();
+  const expected = await sharp("public/brand/favicon.png").resize(64, 64).flatten({ background: "#F7F5EF" }).removeAlpha().raw().toBuffer();
+  const difference = actual.reduce((sum, value, index) => sum + Math.abs(value - expected[index]), 0) / actual.length;
+  expect(difference).toBeLessThan(5);
   expect(size).toEqual({ width: 1200, height: 630 });
 });
 it("imagem social usa a mesma ausência pública", async () => {

@@ -1,6 +1,6 @@
 # Mapa de design — Observatório Goiás
 
-**Estado:** especificação proposta para produto cívico mobile first. Não representa confirmação de implementação, operação, parceria institucional ou dado real. Nome e wordmark são provisórios. Texto jurídico precisa de revisão antes da publicação.
+**Estado:** especificação proposta para produto cívico mobile first. Não representa confirmação de implementação, operação, parceria institucional ou dado real. A identidade visual aprovada usa os arquivos de `public/brand/`, conforme as regras abaixo. Texto jurídico precisa de revisão antes da publicação.
 
 **Escopo:** experiência pública nas rotas `/`, `/problemas`, `/problema/[id]`, `/municipios`, `/municipios/[slug]`, `/registrar`, `/acompanhar`, `/dados` e páginas institucionais. Administração não faz parte desta entrega.
 
@@ -43,9 +43,17 @@ Seis lentes foram usadas: serviço cívico, pesquisa de campo, acessibilidade, j
 
 ## B. Identidade visual e conteúdo
 
-### Wordmark provisório
+### Identidade aprovada
 
-Texto em duas linhas ou em uma linha conforme largura: **Observatório** em peso 650 e **Goiás** em peso 750, ambos em tinta-floresta; pequeno traço de coordenada/meridiano aberto ao lado do nome, sem estrela, brasão ou contorno literal no logotipo. Versão curta “Observatório GO” só em contextos estreitos; nome acessível sempre “Observatório Goiás”. O “GO” não recebe amarelo vivo nem caixa verde que possa lembrar marca oficial.
+Usar os arquivos raster aprovados de `public/brand/`, preservando proporções e cores; `public/LogoObservatorio.png` permanece como fonte original inalterada. As variantes PNG/WebP/JPG são imagens raster, não vetores. Não redesenhar o emblema nem substituir a marca pelo antigo wordmark tipográfico provisório.
+
+- **Cabeçalho compacto:** `observatorio-simbolo.webp` junto ao nome visível “Observatório Goiás”, no link para Início. O símbolo é decorativo quando acompanha esse texto; o nome acessível aparece uma única vez. Manter o nome legível e o foco visível nas larguras estreitas.
+- **Rodapé:** `observatorio-completa.webp`, sem nome do site repetido ao lado; texto alternativo “Observatório Goiás”. Preservar os textos de serviço e links institucionais.
+- **Prévia padrão do site:** `observatorio-completa.png` em tela clara de 1200 × 630, sem texto adjacente que duplique o nome já presente na arte.
+- **Ícones de navegador e instalação:** somente o símbolo de `observatorio-simbolo.png`, incluindo favicon, ícone geral e Apple icon; favicon em formato ICO real, sem renomear bytes PNG. O título do documento continua “Observatório Goiás”.
+- **Prévia de relato:** acrescentar o símbolo à composição dinâmica, preservando nome do site, categoria, município, título e situação; manter título e descrição específicos também no Twitter. Não substituir a ficha por uma logo estática.
+
+As artes só estão aprovadas para superfícies claras. Não há versão invertida aprovada: não recolorir para fundos escuros nem inventar uma variante. A versão completa tem assinatura pequena demais para o cabeçalho compacto; usar ali símbolo e texto legível.
 
 ### Paleta
 
@@ -157,9 +165,9 @@ Componentes interativos suportam: padrão, foco visível, pressionado/selecionad
 
 | Componente | Variações e comportamento | Não fazer |
 |---|---|---|
-| Cabeçalho | Mobile: wordmark, botão menu rotulado “Abrir navegação” se necessário; desktop: Início, Problemas, Dados, Municípios e ação “Registrar problema”. Link “Pular para o conteúdo” aparece no foco. Estado ativo com texto e sublinhado/indicador. | Não usar menu que exige JS para descobrir as rotas; não ocultar Registrar em desktop. |
+| Cabeçalho | Mobile: símbolo com nome visível “Observatório Goiás” no link Início, botão menu rotulado “Abrir navegação” se necessário; desktop: Início, Problemas, Dados, Municípios e ação “Registrar problema”. Link “Pular para o conteúdo” aparece no foco. Estado ativo com texto e sublinhado/indicador. | Não usar menu que exige JS para descobrir as rotas; não ocultar Registrar em desktop. |
 | Barra inferior mobile | 4 itens: Início, Problemas, botão central “Registrar”, Dados. Mínimo 48 px, área segura `env(safe-area-inset-bottom)`, fundo sólido, divisória superior. No fluxo de formulário e acompanhamento privado, não aparece para preservar foco e altura. | Não sobrepor conteúdo: `padding-bottom` ≥ altura total + safe area; não cobrir teclado ou botão de envio. |
-| Rodapé | Sobre, Transparência, Privacidade, Termos, Regras, Contato; limite do serviço em frase curta; link de acompanhamento. Mobile em lista vertical, desktop em 3 grupos. | Não colocar aviso metodológico só no rodapé nem usar texto legal como única explicação do serviço. |
+| Rodapé | Logo completa aprovada, sem nome adjacente duplicado; Sobre, Transparência, Privacidade, Termos, Regras, Contato; limite do serviço em frase curta; link de acompanhamento. Mobile em lista vertical, desktop em 3 grupos. | Não colocar aviso metodológico só no rodapé nem usar texto legal como única explicação do serviço. |
 | Selo de situação | Sete variações descritas em seguida; ícone + rótulo completo, fundos suaves, contorno opcional. Sempre conserva o rótulo em texto. | Não abreviar, usar apenas ponto, associar verde a gravidade ou fundir situação com verificação. |
 | Cartão de relato | Editorial compacto: categoria e selo demonstrativo no topo; título como link principal; local; status e data; resposta oficial como linha independente. A área clicável do título é ampla. Versão “resumo” para home e “linha” para município. | Não colocar contador de afetados como escala, não fazer cartão inteiro competir com múltiplos botões. |
 | Linha do tempo | Lista ordenada `<ol>` cronológica no layout visual; cada item traz data, tipo, texto, situação nova e evidência quando houver. No detalhe, mais recente primeiro visualmente, mas ordem DOM cronológica reversa apenas se anunciada como “Mais recente”. Recomenda-se mais antigo primeiro para leitura linear. | Não inserir eventos privados nem omitir a data; não chamar mensagem do cidadão de resposta do órgão. |
@@ -276,7 +284,7 @@ Hierarquia: navegação → retorno para lista → categoria e demonstração �
 
 **768 px:** coluna de leitura 680 px à esquerda; fotos em grade 2; caixa “situação + datas” e resposta oficial em coluna lateral somente se houver espaço sem alterar ordem de leitura. **1280 px:** conteúdo central 1120 px; coluna principal 720 px e lateral 320 px com ações, protocolo e aviso metodológico; em telas menores que 900 px a lateral volta ao fluxo principal. A situação não é sticky.
 
-**Prévia Open Graph — 1200 × 630:** fundo `fundo`; barra superior wordmark pequeno; coluna esquerda com selo “RELATO DE CIDADÃO · NÃO VERIFICADO” ou “CONFERIDO PELA EQUIPE”, título em até 3 linhas, local fictício e situação em cápsula textual com ícone; filete cartográfico abstrato no canto inferior, sem mapa municipal; rodapé “Observatório Goiás · Não é canal oficial de atendimento”. Ficha OG nunca mostra nome, protocolo privado, fotos identificáveis nem contador de “também me afeta”. Em link real, título/local/status vêm do dado publicado; sem imagem disponível, usa-se a peça neutra. Texto alternativo/descrição OG descreve a peça sem alegar endosso.
+**Prévia Open Graph — 1200 × 630:** páginas gerais usam a logo completa em fundo claro. No detalhe, preservar a ficha dinâmica com nome do site e símbolo aprovado, categoria, título em até 3 linhas, município e situação em texto; o emblema não substitui o conteúdo do relato. Título e descrição específicos permanecem nos metadados Open Graph/Twitter. A ficha nunca mostra nome de pessoa, protocolo privado, fotos identificáveis nem contador de “também me afeta”. Exemplos deste documento usam local fictício; em link real, categoria/título/local/status vêm do dado publicado. Texto alternativo/descrição OG descreve a peça sem alegar endosso. Não adicionar filete cartográfico decorativo nem recolorir a marca para fundo escuro.
 
 ### `/` — home
 
@@ -444,7 +452,7 @@ Rascunho: armazenamento local com aviso para aparelho compartilhado; não há au
 
 ### Compartilhar
 
-Nas páginas públicas, botão “Compartilhar”. No celular, usar folha de compartilhamento nativa como melhoria; sempre manter link direto “Compartilhar no WhatsApp”. Texto prévio: “Relato sobre [título] em [município]. Veja o andamento: [link público]”. Nessas páginas, só URL pública. A ação explícita “Compartilhar link privado” da tela de sucesso M3 é distinta e explica seu poder de acesso. Sucesso do sistema: não alegar que a pessoa enviou; fallback se não houver API abre WhatsApp via link codificado. O link OG usa imagem neutra e não contém contador ou dados privados.
+Nas páginas públicas, botão “Compartilhar”. No celular, usar folha de compartilhamento nativa como melhoria; sempre manter link direto “Compartilhar no WhatsApp”. Texto prévio: “Relato sobre [título] em [município]. Veja o andamento: [link público]”. Nessas páginas, só URL pública. A ação explícita “Compartilhar link privado” da tela de sucesso M3 é distinta e explica seu poder de acesso. Sucesso do sistema: não alegar que a pessoa enviou; fallback se não houver API abre WhatsApp via link codificado. O link OG do relato usa a ficha dinâmica com símbolo e contexto público; a prévia geral usa a logo completa. Nenhuma contém contador ou dados privados.
 
 ### “Também me afeta”
 
@@ -604,7 +612,7 @@ Mapeamento para CSS variables e Tailwind: nomes semânticos estáveis; pode-se e
 
 Já existentes: shell/navegação, home SSR com métricas/relatos/passos, listas/detalhe, municípios, registro/upload/acompanhamento/exclusão, filtros GET município/categoria e tabela de `/dados`, institucionais e estados globais. Preservar o trabalho local e ajustar só o necessário à identidade. Estado de `/dados` com conexão real ainda depende de validação; falha de consulta não comprova tela final.
 
-Ajustes desta entrega: tokens da referência com AA, tipografia local condicionada à licença, wordmark provisório sem filete tricolor, nova hierarquia territorial da home, mapa sincronizado e regressão visual/acessível das rotas. Fase 2 real: busca textual, período, indicadores oficiais; choropleth continua fora desta entrega e exige metodologia/privacidade próprias.
+Ajustes desta entrega: tokens da referência com AA, tipografia local condicionada à licença, identidade aprovada com símbolo e nome no cabeçalho, logo completa no rodapé e prévia geral, símbolo nos ícones e na ficha dinâmica de compartilhamento, sempre em fundo claro e sem filete tricolor, nova hierarquia territorial da home, mapa sincronizado e regressão visual/acessível das rotas. Fase 2 real: busca textual, período, indicadores oficiais; choropleth continua fora desta entrega e exige metodologia/privacidade próprias.
 
 ### Ordem recomendada de construção
 
@@ -637,14 +645,14 @@ Supressão de células pequenas é requisito a definir e implementar, não prote
 
 | Lacuna | Responsável/decisão |
 |---|---|
-| Nome, wordmark, busca de marcas e neutralidade política | Design/brand + validação com cidadãos; nome é provisório. |
+| Busca de marcas e neutralidade política | Design/brand + validação com cidadãos; identidade e aplicações aprovadas acima não substituem essa verificação. |
 | Definição de “conferido pela equipe” e evidência mínima | Operação/editorial; precisa ser pública e não sugerir auditoria oficial. |
 | Campo contato, consentimento e existência de retorno | Produto + privacidade; o briefing não estabelece quando a equipe pode contatar. |
 | Regra para “também me afeta”, deduplicação e anonimato | Produto + engenharia + privacidade; não prometer unicidade antes da decisão. |
 | Exclusão/retensão, prazos e dados que ficam no histórico | Jurídico + privacidade; texto de pedido é modelo, não política. |
 | Política de denúncia, critérios e recurso | Editorial + jurídico; mensagens não devem prometer remoção automática. |
 | Fotos: limites de tamanho/formato, compressão e análise | Engenharia + operação; máximo visual é três fotos. |
-| Logo OG final e fallback de foto | Marca + conteúdo; OG demonstração não contém protocolo privado. |
+| Fallback de foto e conteúdo das prévias | Marca + conteúdo; logo completa da prévia geral e símbolo da ficha dinâmica estão aprovados. Preservar contexto do relato e não expor protocolo privado. |
 | Fontes variáveis e licença, subconjunto latino e orçamento | Engenharia/design; até dois arquivos auto-hospedados. |
 | Valores reais de indicadores, definição de “em acompanhamento” e disponibilidade por município | Dados/operação; dados de demonstração permanecem marcados. |
 | Fontes oficiais (IBGE/INEP/DataSUS), licença, atualização e metodologia | Dados + jurídico; fase 2, nada funcional nesta especificação. |

@@ -13,6 +13,7 @@ export const metadata: Metadata = {
     template: "%s | Observatório Goiás",
   },
   description: "Acompanhe problemas públicos relatados em Goiás.",
+  twitter: { card: "summary_large_image", title: "Observatório Goiás", description: "Acompanhe problemas públicos relatados em Goiás.", images: [{ url: "/opengraph-image.png", alt: "Observatório Goiás" }] },
   robots: { index: false, follow: false },
 };
 

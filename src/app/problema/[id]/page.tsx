@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: PageProps<"/problema/[id]">):
     title: p.titulo, description,
     ...(url ? { alternates: { canonical: url } } : {}),
     openGraph: { type: "article", title: p.titulo, description, ...(url ? { url } : {}), siteName: "Observatório Goiás", locale: "pt_BR" },
-    twitter: { card: "summary_large_image", title: p.titulo, description },
+    twitter: { card: "summary_large_image", title: p.titulo, description, images: [{ url: "/opengraph-image.png", alt: "Observatório Goiás" }] },
   };
 }
 

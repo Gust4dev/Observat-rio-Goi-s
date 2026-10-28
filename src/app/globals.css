@@ -166,9 +166,9 @@ html:has(.shell-publico[data-barra-movel="sim"]) { scroll-padding-bottom: calc(6
 .bg-neutro-fundo .text-texto-suave,
 .bg-neutro-fundo.text-texto-suave { color: var(--color-texto); }
 .shell-cabecalho { background: var(--color-fundo); border-bottom: 1px solid var(--color-borda-suave); }
-/* No chromatic strip: the plain wordmark avoids an institutional flag signature. */
-.shell-wordmark { font-family: var(--font-titulo); font-size: 1.25rem; font-weight: 750; letter-spacing: -0.045em; line-height: 1.15; color: var(--color-texto); text-decoration: none; }
-.shell-wordmark span { color: var(--color-acao); margin-inline-start: 0.25em; }
+/* Keep the approved artwork on the light shell surface. */
+.shell-wordmark { display: inline-flex; align-items: center; gap: 0.625rem; max-width: 100%; font-family: var(--font-titulo); font-size: 1.25rem; font-weight: 750; letter-spacing: -0.045em; line-height: 1.15; color: var(--color-texto); text-decoration: none; }
+.shell-wordmark .shell-nome > span { color: var(--color-acao); margin-inline-start: 0.25em; }
 .shell-nav-destaque:hover, .shell-nav-destaque:active { background: var(--color-acao-pressionada); color: var(--color-superficie); }
 .shell-nav-item[aria-current]:not(.shell-nav-destaque) { background: var(--color-acao-suave); border-radius: var(--radius-controle); }
 .shell-rodape { border-top: 1px solid var(--color-borda-suave); background: var(--color-fundo); }
@@ -177,3 +177,8 @@ html:has(.shell-publico[data-barra-movel="sim"]) { scroll-padding-bottom: calc(6
 
 .bg-erro-fundo .text-erro,
 .bg-erro-fundo.text-erro { color: var(--color-texto); }
+
+.shell-simbolo { width: 2.5rem; height: auto; flex-shrink: 0; }
+.shell-nome { min-width: 0; }
+.shell-marca-rodape { display: block; width: 17.5rem; max-width: 100%; margin-bottom: 1rem; }
+.shell-marca-rodape img { display: block; width: 100%; height: auto; }

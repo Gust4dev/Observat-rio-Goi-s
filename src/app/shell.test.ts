@@ -17,6 +17,7 @@ describe("shell público sem JavaScript", () => {
   });
 });
 
+import { Rodape } from "@/components/Rodape";
 import { Cabecalho } from "@/components/Cabecalho";
 import { NavegacaoInferior } from "@/components/NavegacaoInferior";
 
@@ -42,11 +43,21 @@ describe("destino atual e navegação móvel", () => {
 
 
 describe("identidade e espaço seguro do shell", () => {
-  it("usa wordmark tipográfico sem símbolo institucional", () => {
+  it("combina símbolo decorativo e nome visível em um único link inicial", () => {
     const html = renderToStaticMarkup(createElement(Cabecalho, { pathname: "/" }));
-    expect(html).toContain('class="shell-wordmark"');
-    expect(html).toContain("Observat\u00f3rio <span>Goi\u00e1s</span>");
-    expect(html).not.toMatch(/<svg|<img/);
+    const marca = html.match(/<a[^>]*class="shell-wordmark"[^>]*>(.*?)<\/a>/)?.[1];
+    expect(marca).toBeDefined();
+    expect(marca).toContain("observatorio-simbolo.webp");
+    expect(marca).toContain('alt=""');
+    expect(marca).toContain("Observat\u00f3rio <span>Goi\u00e1s</span>");
+  });
+  it("usa a marca completa como link acessível no rodapé sem nome visível duplicado", () => {
+    const html = renderToStaticMarkup(createElement(Rodape));
+    expect(html).toMatch(/<a[^>]*href="\/"[^>]*><img[^>]*alt="Observat\u00f3rio Goi\u00e1s"/);
+    expect(html).toContain("observatorio-completa.webp");
+    expect(html).not.toMatch(/>Observat\u00f3rio/);
+    expect(html).toContain("Este espa\u00e7o n\u00e3o substitui");
+    expect(html).toContain('href="/contato"');
   });
   it("reserva a altura integral da barra e a área segura para conteúdo e foco", () => {
     const css = readFileSync(new URL("./globals.css", import.meta.url), "utf8");
@@ -55,3 +66,4 @@ describe("identidade e espaço seguro do shell", () => {
     expect(css).toContain('.shell-nav-destaque:hover, .shell-nav-destaque:active');
   });
 });
+
