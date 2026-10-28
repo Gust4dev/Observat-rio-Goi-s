@@ -13,17 +13,20 @@ function hostSupabase(): string | null {
 const host = hostSupabase();
 const origemSupabase = host ? `https://${host}` : "";
 
-// CSP base, sem nonce. 'unsafe-inline' em script-src é necessário porque o Next injeta
-// scripts inline (bootstrap/RSC payload) e um nonce forçaria renderização dinâmica,
-// conflitando com cacheComponents. Nonce fica para o M3 (formulário).
-const csp = [
+// O shell estático do Next contém bootstrap/RSC inline. Nonce global exige renderização
+// dinâmica e é incompatível com PPR; SRI experimental só deu integridade aos arquivos
+// externos no experimento do M3, sem autorizar os scripts inline. O risco residual de
+// 'unsafe-inline' está registrado em docs/plano-m3.md. Turnstile só é liberado no registro.
+const politicaCsp = (comTurnstile = false) => [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'" +
+    (comTurnstile ? " https://challenges.cloudflare.com" : "") +
     (process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'"),
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' data: ${origemSupabase}`.trim(),
   `connect-src 'self' ${origemSupabase}`.trim(),
   "font-src 'self'",
+  comTurnstile ? "frame-src https://challenges.cloudflare.com" : "frame-src 'none'",
   "frame-ancestors 'none'",
   "object-src 'none'",
   "base-uri 'self'",
@@ -70,8 +73,20 @@ const nextConfig: NextConfig = {
             value:
               "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()",
           },
-          { key: "Content-Security-Policy", value: csp },
+          { key: "Content-Security-Policy", value: politicaCsp() },
         ],
+      },
+      {
+        // A última regra com a mesma chave substitui a base (guia headers do Next).
+        source: "/registrar",
+        headers: [
+          { key: "Content-Security-Policy", value: politicaCsp(true) },
+          { key: "Referrer-Policy", value: "no-referrer" },
+        ],
+      },
+      {
+        source: "/acompanhar",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
       },
     ];
   },

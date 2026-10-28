@@ -61,8 +61,8 @@ for (const [view, cols] of Object.entries(permitidas)) {
 const negadas = [200, 201, 204, 206];
 for (const t of ['ocorrencias', 'contatos_privados', 'tokens_gestao', 'historico_moderacao', 'confirmacoes',
                  'denuncias', 'administradores', 'imagens', 'atualizacoes', 'respostas', 'v_fila_moderacao']) {
-  const { status, corpo } = await chamar(`${t}?select=*&limit=1`);
-  if (negadas.includes(status)) falha(`tabela ${t} respondeu ${status} para a chave pública: ${JSON.stringify(corpo).slice(0, 80)}`);
+  const { status } = await chamar(`${t}?select=*&limit=1`);
+  if (negadas.includes(status)) falha(`tabela ${t} respondeu ${status} para a chave pública`);
   else ok(`tabela ${t}: negada (${status})`);
 }
 const ZERO = '00000000-0000-0000-0000-000000000000';
@@ -70,10 +70,14 @@ for (const [fn, corpo] of [
   ['admin_ver_contato', { p_ocorrencia_id: ZERO }],
   ['admin_moderar_ocorrencia', {}],
   ['registrar_ocorrencia', {}],
-  ['acompanhar_por_token', {}],
+  ['acompanhar_por_token', { p_token_hash: `\\x${'00'.repeat(32)}` }],
+  ['solicitar_exclusao_por_token', { p_token_hash: `\\x${'00'.repeat(32)}`, p_apagar_conteudo: true }],
+  ['triagem_sinais', { p_titulo: 'Contrato sintético', p_descricao: 'Texto fictício para sonda sem escrita de relato.', p_origem_hash: null }],
 ]) {
   const r = await chamar(`rpc/${fn}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
   if (negadas.includes(r.status)) falha(`rpc ${fn} respondeu ${r.status} para a chave pública`);
+  else if (['acompanhar_por_token', 'solicitar_exclusao_por_token', 'triagem_sinais'].includes(fn) &&
+           !['42501', 'PGRST202'].includes(r.corpo?.code)) falha(`rpc ${fn}: erro não comprova negação de EXECUTE (${r.status})`);
   else ok(`rpc ${fn}: negada (${r.status})`);
 }
 
@@ -82,6 +86,35 @@ for (const [fn, corpo] of [
   const r = await chamar('municipios', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: 'x' }) });
   if (negadas.includes(r.status)) falha(`INSERT em municipios respondeu ${r.status}`);
   else ok(`INSERT em municipios: negado (${r.status})`);
+}
+
+// ---- 4) superfície HTTP do app, opcional: configurar URL e acesso do staging só no ambiente do comando.
+// Não envia relato nem segredo real. Ex.: CONTRATO_APP_URL=http://localhost:3000.
+const APP = process.env.CONTRATO_APP_URL?.replace(/\/+$/, '');
+if (APP) {
+  const origem = new URL(APP).origin;
+  const usuario = process.env.ACESSO_STAGING_USUARIO;
+  const senha = process.env.ACESSO_STAGING_SENHA;
+  const acesso = usuario && senha ? { Authorization: `Basic ${Buffer.from(`${usuario}:${senha}`).toString('base64')}` } : {};
+  for (const api of ['registrar', 'acompanhar', 'excluir']) {
+    const url = `${APP}/api/${api}`;
+    const metodo = await fetch(url, { headers: acesso, signal: AbortSignal.timeout(15000) });
+    if (metodo.status !== 405) falha(`/api/${api}: GET deve responder 405, veio ${metodo.status}`);
+    else ok(`/api/${api}: GET negado (405)`);
+
+    const resposta = await fetch(url, {
+      method: 'POST', headers: { ...acesso, Origin: `${origem}.invalid`, 'Content-Type': 'application/json' },
+      body: '{}', signal: AbortSignal.timeout(15000),
+    });
+    const corpo = await resposta.json().catch(() => null);
+    if (![403, 503].includes(resposta.status) || !corpo?.erro?.codigo || !corpo?.erro?.mensagem) {
+      falha(`/api/${api}: origem inválida não recebeu erro genérico fechado (${resposta.status})`);
+    } else if (!resposta.headers.get('cache-control')?.includes('no-store')) {
+      falha(`/api/${api}: resposta privada sem no-store`);
+    } else ok(`/api/${api}: origem inválida fechada (${resposta.status}), genérica e no-store`);
+  }
+} else {
+  console.log('PENDENTE superfície HTTP do app: defina CONTRATO_APP_URL e credenciais de acesso no ambiente do comando.');
 }
 
 if (falhas.length) {
