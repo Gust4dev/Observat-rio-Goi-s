@@ -43,7 +43,7 @@ select count(*)::integer                                       as total_ocorrenc
        count(distinct o.municipio_id)::integer                 as municipios_com_registros,
        count(*) filter (where exists (select 1 from public.atualizacoes a
               where a.ocorrencia_id = o.id and a.publica and a.tipo = 'resposta_oficial'))::integer as com_resposta_oficial,
-       count(*) filter (where o.situacao = 'resolvido')::integer as resolvidas_documentadas
+       count(*) filter (where o.situacao = 'resolvido' and exists (select 1 from public.atualizacoes a where a.ocorrencia_id=o.id and a.publica and a.situacao_nova='resolvido' and length(btrim(a.texto))>0 and length(btrim(a.evidencia))>0))::integer as resolvidas_documentadas
   from public.ocorrencias o
  where o.moderacao = 'publicado';
 

@@ -6,7 +6,7 @@ export default function NaoEncontrado() {
       <h1>Página não encontrada</h1>
       <EstadoVazio
         titulo="Não encontramos o que você procurava"
-        texto="O endereço pode estar errado ou o relato pode ter sido removido."
+        texto="Não há conteúdo público disponível neste endereço."
         acaoHref="/problemas"
         acaoRotulo="Ver relatos"
       />

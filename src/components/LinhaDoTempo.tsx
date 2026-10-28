@@ -9,33 +9,22 @@ export type ItemLinhaDoTempo = {
   evidencia: string | null;
   criadoEm: string;
 };
-
+const TIPOS: Record<string, string> = { mudanca_situacao: "Mudança de situação", providencia: "Providência", evidencia: "Evidência", resposta_oficial: "Resposta oficial", nota: "Nota" };
+function linkSeguro(valor: string): boolean {
+  try { const url = new URL(valor); return url.protocol === "https:" && !url.username && !url.password && !/[\s\\]/.test(valor); } catch { return false; }
+}
 export function LinhaDoTempo({ itens }: { itens: ItemLinhaDoTempo[] }) {
-  return (
-    <ol className="border-l-2 border-borda pl-4">
-      {itens.map((item) => (
-        <li key={item.id} className="relative pb-6 last:pb-0">
-          <span
-            aria-hidden="true"
-            className="absolute -left-[1.45rem] top-2 h-3 w-3 rounded-full bg-acao"
-          />
-          <p className="text-sm text-texto-suave">
-            <time dateTime={item.criadoEm}>{formatarData(item.criadoEm)}</time>
-          </p>
-          {item.situacaoNova ? (
-            <p className="font-semibold">
-              Situação: {rotuloSituacao(item.situacaoNova)}
-            </p>
-          ) : null}
-          <p className="whitespace-pre-line">{item.texto}</p>
-          {item.evidencia ? (
-            <p className="mt-1 text-sm">
-              <span className="font-semibold">Evidência:</span>{" "}
-              <span className="whitespace-pre-line">{item.evidencia}</span>
-            </p>
-          ) : null}
-        </li>
-      ))}
-    </ol>
-  );
+  const ordenados = [...itens].sort((a, b) => {
+    const instante = (valor: string) => { const n = Date.parse(valor); return Number.isNaN(n) ? Infinity : n; };
+    return instante(a.criadoEm) - instante(b.criadoEm) || String(a.id).localeCompare(String(b.id), "pt-BR", { numeric: true });
+  });
+  if (!ordenados.length) return <p className="text-texto-suave">Ainda não há atualizações publicadas.</p>;
+  return <ol aria-label="Histórico, do mais antigo ao mais recente" className="border-l border-borda pl-5">{ordenados.map(item => <li key={item.id} className="relative pb-6 last:pb-0">
+    <span aria-hidden="true" className="absolute -left-[1.6rem] top-2 h-3 w-3 bg-acao" />
+    <p className="text-sm text-texto-suave">{formatarData(item.criadoEm) ? <time dateTime={item.criadoEm}>{formatarData(item.criadoEm)}</time> : "Data não informada"}</p>
+    <p className="font-semibold">{TIPOS[item.tipo] ?? "Atualização"}</p>
+    {item.situacaoNova && (item.situacaoNova === "resolvido" && !(item.texto.trim() && item.evidencia?.trim()) ? <p>Resolução sem documentação</p> : <p>Situação: {rotuloSituacao(item.situacaoNova)}</p>)}
+    <p className="whitespace-pre-line break-words">{item.texto}</p>
+    {item.evidencia && <p className="mt-1 break-words text-sm"><span className="font-semibold">Evidência: </span>{linkSeguro(item.evidencia) ? <a href={item.evidencia} rel="noopener noreferrer">{item.evidencia}</a> : <span className="whitespace-pre-line">{item.evidencia}</span>}</p>}
+  </li>)}</ol>;
 }

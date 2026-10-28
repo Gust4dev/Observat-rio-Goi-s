@@ -52,3 +52,14 @@ db/supabase/
 
 # copia antiga da doc (com referencias internas); a versao publica canonica fica em docs/ e db/
 observatorio-docs/
+
+# ferramentas e skills de agentes (locais, nao fazem parte do produto)
+_bmad/
+_bmad-output/
+docs/superpowers/
+.claude/
+.agents/
+.codex/
+.cursor/
+.gemini/
+.opencode/

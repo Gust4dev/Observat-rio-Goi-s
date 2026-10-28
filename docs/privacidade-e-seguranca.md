@@ -46,3 +46,9 @@ Nonce global foi rejeitado porque o guia instalado do Next 16 informa incompatib
 ## Gate de escrita da Task 4.1
 
 O registro fica fechado por padrão. O opt-in servidor `AMBIENTE_REGISTRO=staging_ficticio` permite somente revisão (`moderar_tudo`, gravação `pendente`): preview Vercel com credenciais do staging, ou loopback local. Deploy Vercel de produção permanece bloqueado. Sem política aprovada, `texto_automatico` não autoriza publicação. Usar banco separado e conteúdo fictício; o gate técnico não substitui aprovação jurídica e operacional. O DTO M3 rejeita contato e consentimento adicionais; os parâmetros legados de contato no RPC continuam nulos e consentimento falso.
+
+## Validação de segurança do mapa — 2026-10-28
+
+A varredura local de `.next/static` e `.next/server` procurou o valor da credencial `service_role` existente no ambiente sem imprimi-lo e não encontrou literal nos bundles. Acesso ao app local sem autenticação foi recusado (401); com credenciais fictícias temporárias, apenas locais, as páginas puderam ser verificadas. Nenhuma credencial real foi passada ao navegador. O contrato remoto de staging não foi executado e as migrations/bucket de fotos 011/012 ainda precisam de aplicação/configuração no staging.
+
+Os testes automatizados de registro/acompanhamento, escaping textual, URL/validação de imagem, limites e resposta pública estão cobertos nas suítes direcionadas e na suíte completa. Esta rodada não substitui teste de abuso/rate limit/Turnstile contra ambiente preparado, auditoria de logs/headers no deploy, teste de leitor de tela nem validação operacional de exclusão. A política CSP mantém `unsafe-inline` no bootstrap/RSC do Next atual, risco residual já documentado; não há afirmação de CSP estrita.

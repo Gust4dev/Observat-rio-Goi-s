@@ -1,10 +1,75 @@
 {
-  "v_ocorrencias_publicas": ["id", "protocolo", "municipio_id", "municipio_nome", "municipio_slug", "categoria_id", "categoria_nome", "categoria_slug", "titulo", "descricao", "situacao", "verificado", "publicado_em", "atualizado_em", "confirmacoes_total", "tem_resposta_oficial"],
-  "v_imagens_publicas": ["id", "ocorrencia_id", "ordem", "caminho_storage"],
-  "v_atualizacoes_publicas": ["id", "ocorrencia_id", "tipo", "situacao_nova", "texto", "evidencia", "criado_em"],
-  "v_respostas_publicas": ["id", "ocorrencia_id", "autor_vinculo", "texto", "publicada_em"],
-  "v_indicadores_gerais": ["total_ocorrencias", "municipios_com_registros", "com_resposta_oficial", "resolvidas_documentadas"],
-  "v_indicadores_municipio_categoria": ["municipio_slug", "municipio_nome", "categoria_slug", "categoria_nome", "total"],
-  "v_indicadores_mensal": ["mes", "total"],
-  "v_indicadores_situacao": ["situacao", "total"]
+  "v_ocorrencias_publicas": [
+    "id",
+    "protocolo",
+    "municipio_id",
+    "municipio_nome",
+    "municipio_slug",
+    "categoria_id",
+    "categoria_nome",
+    "categoria_slug",
+    "titulo",
+    "descricao",
+    "situacao",
+    "verificado",
+    "publicado_em",
+    "atualizado_em",
+    "confirmacoes_total",
+    "tem_resposta_oficial"
+  ],
+  "v_imagens_publicas": [
+    "id",
+    "ocorrencia_id",
+    "ordem",
+    "caminho_storage"
+  ],
+  "v_atualizacoes_publicas": [
+    "id",
+    "ocorrencia_id",
+    "tipo",
+    "situacao_nova",
+    "texto",
+    "evidencia",
+    "criado_em"
+  ],
+  "v_respostas_publicas": [
+    "id",
+    "ocorrencia_id",
+    "autor_vinculo",
+    "texto",
+    "publicada_em"
+  ],
+  "v_indicadores_gerais": [
+    "total_ocorrencias",
+    "municipios_com_registros",
+    "com_resposta_oficial",
+    "resolvidas_documentadas"
+  ],
+  "v_indicadores_municipio_categoria": [
+    "municipio_slug",
+    "municipio_nome",
+    "categoria_slug",
+    "categoria_nome",
+    "total"
+  ],
+  "v_indicadores_mensal": [
+    "mes",
+    "total"
+  ],
+  "v_indicadores_situacao": [
+    "situacao",
+    "total"
+  ],
+  "v_dados_painel": [
+    "id",
+    "municipio_slug",
+    "municipio_nome",
+    "categoria_slug",
+    "categoria_nome",
+    "mes",
+    "situacao",
+    "total",
+    "com_resposta_oficial",
+    "resolvidas_documentadas"
+  ]
 }

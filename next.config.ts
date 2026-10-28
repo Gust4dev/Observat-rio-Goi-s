@@ -23,7 +23,7 @@ const politicaCsp = (comTurnstile = false) => [
     (comTurnstile ? " https://challenges.cloudflare.com" : "") +
     (process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'"),
   "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: ${origemSupabase}`.trim(),
+  `img-src 'self' data: ${comTurnstile ? "blob:" : ""} ${origemSupabase}`.trim(),
   `connect-src 'self' ${origemSupabase}`.trim(),
   "font-src 'self'",
   comTurnstile ? "frame-src https://challenges.cloudflare.com" : "frame-src 'none'",

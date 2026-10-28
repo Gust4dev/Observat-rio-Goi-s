@@ -1,3 +1,4 @@
+import { exigirStaging } from "@/lib/registro/staging";
 import { z } from "zod";
 import { ErroRegistro } from "@/lib/registro/erros";
 import { registroSchema } from "@/lib/registro/schemas";
@@ -7,14 +8,6 @@ import { entradaHttp, falhaHttp, limitarHttp, resolverReferencia, respostaPrivad
 
 const resultadoSchema = z.array(z.object({ out_id: z.uuid(), out_protocolo: z.string().min(1).max(100), out_repetida: z.boolean() })).length(1);
 const sinaisSchema = z.array(z.object({ out_texto_repetido: z.boolean(), out_origem_sinalizada: z.boolean() })).length(1);
-
-/** Gate temporário até aprovação jurídica/operacional: apenas dados fictícios em revisão. */
-function exigirStaging(request: Request) {
-  if (process.env.AMBIENTE_REGISTRO !== "staging_ficticio" || process.env.VERCEL_ENV === "production") throw new ErroRegistro("indisponivel");
-  if (process.env.VERCEL === "1") {
-    if (process.env.VERCEL_ENV !== "preview" || !process.env.ACESSO_STAGING_USUARIO?.trim() || !process.env.ACESSO_STAGING_SENHA?.trim()) throw new ErroRegistro("indisponivel");
-  } else if (!["localhost", "127.0.0.1", "[::1]"].includes(new URL(request.url).hostname)) throw new ErroRegistro("indisponivel");
-}
 
 export async function POST(request: Request) {
   try {

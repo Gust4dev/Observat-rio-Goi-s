@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { tokenDoFragmento } from "./fluxo";
+import { AvisoConexao } from "@/components/AvisoConexao";
+import { mensagemConsulta } from "./estado-consulta";
 
 type Atualizacao = { id: string | number; tipo: string; situacao_nova: string | null; texto: string; evidencia: string | null; criado_em: string };
 type Resposta = { id: string | number; autor_vinculo: string; texto: string; criado_em: string };
@@ -20,11 +22,16 @@ function dataLegivel(valor: string): string {
   return Number.isNaN(data.valueOf()) ? "Data indisponível" : new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium", timeStyle: "short" }).format(data);
 }
 
+async function identificador(segredo: string) {
+  return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(segredo))), b => b.toString(16).padStart(2, "0")).join("");
+}
+
 export function AcompanharClient() {
   const token = useSyncExternalStore(observarFragmento, lerFragmento, () => null);
   const [relato, setRelato] = useState<Relato | null>(null);
-  const [estado, setEstado] = useState<"carregando" | "pronto" | "erro" | "confirmando" | "excluindo" | "excluido">("carregando");
+  const [estado, setEstado] = useState<"inicial" | "carregando" | "pronto" | "erro" | "confirmando" | "excluindo" | "excluido">("inicial");
   const [erro, setErro] = useState("");
+  const hashConsultado = useRef<string | null>(null);
   const [confirmacao, setConfirmacao] = useState(false);
   const titulo = useRef<HTMLHeadingElement>(null);
   const tituloConfirmacao = useRef<HTMLHeadingElement>(null);
@@ -32,45 +39,50 @@ export function AcompanharClient() {
   const consultar = useCallback(async (segredo: string) => {
     setEstado("carregando"); setErro("");
     try {
-      const resposta = await fetch("/api/acompanhar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: segredo }), cache: "no-store" });
+      const resposta = await fetch("/api/acompanhar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: segredo }), cache: "no-store", referrerPolicy: "no-referrer" });
       const dados: unknown = await resposta.json().catch(() => null);
       if (!resposta.ok || !dados || typeof dados !== "object" || typeof (dados as Record<string, unknown>).protocolo !== "string") {
-        const codigo = dados && typeof dados === "object" ? ((dados as { erro?: { codigo?: string } }).erro?.codigo) : undefined;
-        if (codigo === "indisponivel" || resposta.status === 503 || resposta.status === 429) throw new Error("temporario");
-        throw new Error("neutro");
+        throw new Error(mensagemConsulta(resposta.status));
       }
+      hashConsultado.current = await identificador(segredo);
+      window.history.replaceState(null, "", "/acompanhar");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+      segredo = "";
       setRelato(dados as Relato); setEstado("pronto"); requestAnimationFrame(() => titulo.current?.focus());
     } catch (falha) {
-      setRelato(null); setErro(falha instanceof Error && falha.message === "temporario" ? "Não foi possível carregar agora. Tente novamente." : MENSAGEM_NEUTRA); setEstado("erro"); requestAnimationFrame(() => titulo.current?.focus());
+      setRelato(null); setErro(falha instanceof Error && [400, 429, 503].some(status => mensagemConsulta(status) === falha.message) ? falha.message : mensagemConsulta(0)); setEstado("erro"); requestAnimationFrame(() => titulo.current?.focus());
     }
   }, []);
-
-  useEffect(() => {
-    if (token) queueMicrotask(() => { void consultar(token); });
-  }, [consultar, token]);
 
   useEffect(() => {
     if (confirmacao) requestAnimationFrame(() => tituloConfirmacao.current?.focus());
   }, [confirmacao]);
 
-  async function excluir() {
-    if (!token) return;
+  async function excluir(formulario: HTMLFormElement) {
+    const campo = formulario.elements.namedItem("link-privado") as HTMLInputElement;
+    const valor = campo.value;
+    const segredo = tokenDoFragmento(valor.includes("#") ? valor.slice(valor.indexOf("#")) : `#${valor}`);
+    campo.value = "";
+    if (!segredo) { setErro(MENSAGEM_NEUTRA); requestAnimationFrame(() => tituloConfirmacao.current?.focus()); return; }
+    if (await identificador(segredo) !== hashConsultado.current) { setErro(MENSAGEM_NEUTRA); requestAnimationFrame(() => tituloConfirmacao.current?.focus()); return; }
     setEstado("excluindo"); setErro("");
     try {
-      const resposta = await fetch("/api/excluir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, confirmacao: true }), cache: "no-store" });
+      const resposta = await fetch("/api/excluir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: segredo, confirmacao: true }), cache: "no-store", referrerPolicy: "no-referrer" });
       const dados: unknown = await resposta.json().catch(() => null);
       if (!resposta.ok || !dados || typeof dados !== "object" || (dados as { confirmacao?: unknown }).confirmacao !== "Exclusão concluída.") throw new Error();
       setRelato(null); setConfirmacao(false); setEstado("excluido");
       window.history.replaceState(null, "", "/acompanhar");
       requestAnimationFrame(() => titulo.current?.focus());
     } catch {
-      setErro("Não foi possível concluir agora. Tente novamente."); setEstado("pronto"); setConfirmacao(false);
+      setErro("Não foi possível concluir agora. Tente novamente."); setEstado("confirmando"); requestAnimationFrame(() => tituloConfirmacao.current?.focus());
     }
   }
 
   return <section aria-live="polite" className="space-y-5">
-    {!token && estado !== "excluido" && <div className="rounded-cartao border border-borda bg-neutro-fundo p-5"><h2 ref={titulo} tabIndex={-1}>Acompanhamento</h2><p className="mt-2">{MENSAGEM_NEUTRA}</p></div>}
-    {token && estado === "carregando" && <p role="status">Carregando acompanhamento…</p>}
+    <AvisoConexao />
+    {!token && estado === "inicial" && <div className="rounded-cartao border border-borda bg-neutro-fundo p-5"><h2 ref={titulo} tabIndex={-1}>Acompanhamento</h2><p className="mt-2">{MENSAGEM_NEUTRA}</p></div>}
+    {(estado === "inicial" || estado === "erro") && <div><p>O código só será enviado ao escolher consultar. Após o resultado, abra novamente seu link guardado para atualizar.</p><button disabled={!token} className="mt-4 min-h-12 rounded-controle border border-borda px-4 font-semibold disabled:opacity-60" onClick={() => { if (token) void consultar(token); }}>Consultar acompanhamento</button></div>}
+    {estado === "carregando" && <p role="status">Carregando acompanhamento…</p>}
     {estado === "erro" && <div className="rounded-cartao border border-borda bg-neutro-fundo p-5"><h2 ref={titulo} tabIndex={-1}>Acompanhamento</h2><p className="mt-2">{erro}</p>{token && <button className="mt-4 min-h-12 rounded-controle border border-borda px-4 font-semibold" onClick={() => void consultar(token)}>Tentar novamente</button>}</div>}
     {estado === "excluido" && <div className="rounded-cartao border border-borda bg-sucesso-fundo p-5"><h2 ref={titulo} tabIndex={-1}>Exclusão concluída</h2><p className="mt-2">O texto do relato foi retirado da exibição. O registro de auditoria permanece.</p></div>}
     {(estado === "pronto" || estado === "confirmando" || estado === "excluindo") && relato && <>
@@ -96,8 +108,11 @@ export function AcompanharClient() {
       {!confirmacao && <button disabled={estado === "excluindo"} className="min-h-12 rounded-controle border border-erro px-4 font-semibold text-erro disabled:opacity-60" onClick={() => { setConfirmacao(true); setEstado("confirmando"); }}>Pedir exclusão do relato</button>}
       {confirmacao && <section aria-labelledby="confirmar-exclusao" className="rounded-cartao border border-erro bg-erro-fundo p-5">
         <h3 id="confirmar-exclusao" ref={tituloConfirmacao} tabIndex={-1}>Confirmar exclusão</h3>
-        <p className="mt-2">O texto será retirado da exibição e substituído por um marcador. O registro de auditoria permanece. Esta ação não pode ser desfeita por este link.</p>
-        {estado === "excluindo" ? <p role="status" className="mt-3">Concluindo exclusão…</p> : <div className="mt-4 flex flex-col gap-3 sm:flex-row"><button className="min-h-12 rounded-controle bg-erro px-4 font-semibold text-white" onClick={() => void excluir()}>Confirmar exclusão</button><button className="min-h-12 rounded-controle border border-borda px-4 font-semibold" onClick={() => { setConfirmacao(false); setEstado("pronto"); }}>Cancelar</button></div>}
+        <p className="mt-2">Ao confirmar, o servidor tentará retirar o texto da exibição e substituí-lo por um marcador. Não há promessa de remoção imediata ou de eliminação de todos os registros. O registro de auditoria permanece. Esta ação não pode ser desfeita por este link.</p>
+        <label htmlFor="link-exclusao" className="mt-3 block">Cole o link privado guardado para autorizar a exclusão deste relato</label>
+        <form onSubmit={(event) => { event.preventDefault(); void excluir(event.currentTarget); }}>
+        <input id="link-exclusao" name="link-privado" type="password" autoComplete="off" required className="mt-2 min-h-12 w-full rounded-controle border border-borda px-3" />
+        {estado === "excluindo" ? <p role="status" className="mt-3">Concluindo exclusão…</p> : <div className="mt-4 flex flex-col gap-3 sm:flex-row"><button className="min-h-12 rounded-controle bg-erro px-4 font-semibold text-white" type="submit">Confirmar exclusão</button><button type="button" className="min-h-12 rounded-controle border border-borda px-4 font-semibold" onClick={() => { setConfirmacao(false); setEstado("pronto"); requestAnimationFrame(() => titulo.current?.focus()); }}>Cancelar</button></div>}</form>
       </section>}
     </>}
   </section>;

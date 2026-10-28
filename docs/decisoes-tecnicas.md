@@ -30,6 +30,7 @@ Formato: contexto → decisão → alternativas → consequências. Status: Prop
 - **Contexto:** sem conta, é fácil inflar o contador.
 - **Decisão:** deduplicação básica e exibição com ressalva, ou adiar o recurso.
 - **Consequências:** o número não pode ser usado como métrica de gravidade (consistente com a metodologia).
+- **Disposição da Task 5.2 (2026-10-28): adiada.** O detalhe mantém “Também me afeta” e “Sinalizar este relato” desabilitados, com explicação de indisponibilidade e ressalva metodológica. `registrar_confirmacao(uuid, bytea)` deduplica somente ocorrência/hash de 32 bytes; não define origem, janela temporal, limite, desafio ou desfazer. `registrar_denuncia(uuid, text, text)` aceita motivos fechados e texto de até 1000 caracteres, mas não implementa proteção de abuso nem uniformização HTTP. Ambos os RPCs são restritos a `service_role`; não há endpoint público contratado. Produto, engenharia e privacidade precisam definir esses contratos e a política de denúncia antes de habilitar as ações; nenhuma identidade, retenção ou possibilidade de desfazer foi presumida.
 
 ## ADR-0006 — Escritas só por funções; nenhuma política de escrita nas tabelas (Proposta, 2026-10-26)
 - **Contexto:** a auditoria só vale se não houver caminho de escrita que a contorne.

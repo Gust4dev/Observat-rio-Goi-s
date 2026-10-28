@@ -14,6 +14,7 @@ MigraÃ§Ãµes em ordem. DescriÃ§Ã£o das tabelas e dos estados em [`../docs/modelo-
 | `008_seed_municipios.sql` | Os 246 municÃ­pios de GoiÃ¡s (IBGE); idempotente, vai tambÃ©m para produÃ§Ã£o |
 | `009_view_sem_busca.sql` | `v_ocorrencias_publicas` deixa de expor a coluna `busca`; a lista permitida de colunas pÃºblicas fica em `colunas-publicas.json` e Ã© conferida por teste |
 | `010_acompanhamento_completo.sql` | Acrescenta cronologia pÃºblica e respostas publicadas ao DTO privado de `acompanhar_por_token`, com execuÃ§Ã£o exclusiva para `service_role` |
+| `011_imagens_resilientes.sql` | Contexto privado e overload de `registrar_imagem` com bloqueio por ocorrÃªncia e retry seguro do mesmo conteÃºdo/slot; nÃ£o altera views pÃºblicas |
 | `seed/staging_ficticio.sql` | Dados fictÃ­cios **sÃ³ para staging** (trava aborta se houver dado real) |
 | `tests/` | Stub do Supabase, testes de seguranÃ§a (`rls_test.sql`, `migracao_007_test.sql`) e executor |
 
@@ -23,6 +24,7 @@ MigraÃ§Ãµes em ordem. DescriÃ§Ã£o das tabelas e dos estados em [`../docs/modelo-
 | `registrar_ocorrencia(..., p_chave_idempotencia, p_origem_hash)` | `out_id`, `out_protocolo`, `out_repetida` | RepetiÃ§Ã£o com a mesma chave **e mesmo token** devolve a existente; com outro token, erro `22023` |
 | `acompanhar_por_token(token_hash)` | Campos bÃ¡sicos da ocorrÃªncia, `out_atualizacoes`, `out_respostas` | Token invÃ¡lido retorna zero linhas. Arrays cronolÃ³gicos contÃªm somente atualizaÃ§Ãµes `publica = true` e respostas `publicada`; nunca contato, nota interna ou autor administrativo |
 | `registrar_imagem(token_hash, ordem, caminho, mime, tamanho)` | id da imagem | Nasce `pendente`; ordem 1â€“3; token invÃ¡lido â†’ `P0002` |
+| `registrar_imagem(token_hash, ordem, caminho, mime, tamanho, contexto)` | id da imagem | M4: contexto privado obrigatÃ³rio; mesmo caminho/slot/metadados retorna mesmo id; conteÃºdo diferente no slot retorna `23505`; somente JPEG reencodado â‰¤2 MiB |
 | `registrar_resposta(ocorrencia, vinculo, contato, texto)` | boolean | `false` se a ocorrÃªncia nÃ£o estÃ¡ publicada; entra `pendente` |
 | `triagem_sinais(titulo, descricao, origem_hash, janela, limite)` | `out_texto_repetido`, `out_origem_sinalizada` | Os limiares vÃªm do servidor (nÃ£o pÃºblicos) |
 | `consumir_limite(chave, janela, maximo)` | boolean | `false` = estourou. Janela fixa; a chave Ã© composta no servidor |
@@ -88,3 +90,8 @@ npx supabase db query --linked --project-ref <ref-staging> -f db/seed/staging_fi
 - Toda funÃ§Ã£o nova em `public` fica **sem** `EXECUTE` para `anon`/`authenticated` atÃ© um `GRANT` explÃ­cito.
 - Ao criar uma view pÃºblica nova, listar as colunas Ã  mÃ£o e filtrar por `moderacao = 'publicado'`.
 - Evitar o Realtime do Supabase nas tabelas base: ele depende das mesmas polÃ­ticas e Ã© fÃ¡cil expor demais.
+
+### Dados do painel (012)
+Aplicar `012_dados_painel.sql` após 011: corrige resolução documentada (situação resolvido + atualização pública da resolução com texto e evidência não vazios). A view pública agregada `v_dados_painel` agrupa município, categoria, mês de publicação em America/Sao_Paulo e situação, com contagens sem duplicar atualizações. O cliente percorre todas as páginas por id determinístico, sem limite total. Leituras entre páginas não são um snapshot transacional.
+
+Configure `DADOS_DEMONSTRACAO=true` somente no ambiente com seed fictício confirmado; ausência da variável não presume demonstração. Não altera a fonte de dados.

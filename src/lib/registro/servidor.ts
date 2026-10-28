@@ -2,7 +2,7 @@ import "server-only";
 import type { ZodType } from "zod";
 import { ErroRegistro } from "./erros";
 
-const FUNCOES = ["registrar_ocorrencia", "acompanhar_por_token", "solicitar_exclusao_por_token", "consumir_limite", "triagem_sinais"] as const;
+const FUNCOES = ["registrar_ocorrencia", "registrar_imagem", "acompanhar_por_token", "solicitar_exclusao_por_token", "consumir_limite", "triagem_sinais"] as const;
 export type FuncaoRegistro = (typeof FUNCOES)[number];
 
 function obrigatoria(...partes: string[]): string {

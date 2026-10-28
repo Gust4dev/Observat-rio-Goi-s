@@ -58,6 +58,15 @@ export type Filtros = { municipio?: string; categoria?: string; cursor?: Cursor 
 
 export type SearchParamsBrutos = Record<string, string | string[] | undefined>;
 
+const buscaMunicipioSchema = z.preprocess(primeiro,
+  z.string().trim().max(80).regex(/^[\p{L}\p{M} '-]*$/u).catch(""));
+
+/** Busca apenas nomes de municípios; nunca é uma expressão PostgREST. */
+export function lerBuscaMunicipio(valor: unknown): string {
+  const resultado = buscaMunicipioSchema.safeParse(valor);
+  return resultado.success ? resultado.data : "";
+}
+
 /** Nunca lança. */
 export function lerFiltros(sp: SearchParamsBrutos | undefined | null): Filtros {
   const r = filtrosSchema.safeParse(sp && typeof sp === "object" ? sp : {});

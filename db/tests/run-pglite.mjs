@@ -14,7 +14,7 @@ const ler = (f) => readFile(path.join(dir, f), 'utf8');
 const arquivos = [
   '00_stub_supabase.sql', '../001_tipos_e_tabelas.sql', '../002_funcoes.sql',
   '../003_views.sql', '../004_rls_e_grants.sql', '../006_seed_categorias.sql', '../007_lacunas_do_desenho.sql',
-  '../009_view_sem_busca.sql', '../010_acompanhamento_completo.sql',
+  '../009_view_sem_busca.sql', '../010_acompanhamento_completo.sql', '../011_imagens_resilientes.sql', '../012_dados_painel.sql',
 ];
 
 const db = new PGlite();
@@ -28,7 +28,7 @@ for (const f of arquivos) {
   }
 }
 
-for (const t of ['rls_test.sql', 'migracao_007_test.sql', 'migracao_010_test.sql']) {
+for (const t of ['rls_test.sql', 'migracao_007_test.sql', 'migracao_010_test.sql', 'migracao_011_test.sql', 'migracao_012_test.sql']) {
   try {
     await db.exec(await ler(t));
     console.log('ok   ', t);

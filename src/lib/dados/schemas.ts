@@ -132,3 +132,11 @@ export type Municipio = z.infer<typeof municipioSchema>;
 export const COLUNAS_CATEGORIA = ["slug", "nome", "ordem"] as const;
 export const categoriaSchema = z.object({ slug: z.string(), nome: z.string(), ordem: z.number().int() });
 export type Categoria = z.infer<typeof categoriaSchema>;
+
+// Sinal público já autorizado por 004: SELECT da tabela com leitura_publica usando true.
+export const COLUNAS_MUNICIPIO_COBERTURA = [...COLUNAS_MUNICIPIO, 'ativo_acompanhamento'] as const;
+export const municipioCoberturaSchema = municipioSchema.extend({ ativo_acompanhamento: z.boolean() });
+
+export const COLUNAS_DADO_PAINEL = ['id','municipio_slug','municipio_nome','categoria_slug','categoria_nome','mes','situacao','total','com_resposta_oficial','resolvidas_documentadas'] as const;
+export const dadoPainelSchema = z.object({id:uuid,municipio_slug:z.string(),municipio_nome:z.string(),categoria_slug:z.string(),categoria_nome:z.string(),mes:z.string().regex(/^\d{4}-\d{2}-01$/),situacao,total:z.number().int().nonnegative(),com_resposta_oficial:z.number().int().nonnegative(),resolvidas_documentadas:z.number().int().nonnegative()});
+export type DadoPainel = z.infer<typeof dadoPainelSchema>;

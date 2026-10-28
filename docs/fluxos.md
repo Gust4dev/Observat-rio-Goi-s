@@ -100,3 +100,11 @@ Busca textual, período, mapa e fontes oficiais são backlog fase 2 sem controle
 
 Fontes/licenças WOFF2 e geometria Goiás, Turnstile, aprovação de sharp e políticas de contato, publicação,
 denúncia, exclusão e cobertura têm dono/ponto de bloqueio em `estrutura-do-sistema.md` §18.4.
+
+## Estado atual do mapa — 2026-10-28
+
+As tabelas de rotas acima são um inventário anterior ao mapa de implementação e ficam supersedidas pelo estado descrito aqui e em `estrutura-do-sistema.md` §21. Rotas de leitura, `/registrar`, `/acompanhar` e `/dados` existem e foram incluídas no build. O registro segue fechado salvo opt-in de staging fictício/local ou preview protegido e sempre aguarda moderação; não usar produção para testes. Acompanhamento usa o segredo apenas do fragmento e POST.
+
+A UI de `/dados` está construída, mas a instância conectada ainda não expõe `v_dados_painel`: resposta PostgREST 404. A migration `012_dados_painel.sql` passou em PGlite; staging aguarda a aplicação operacional das migrations 011/012 e configuração do bucket privado. Nenhuma escrita externa foi feita nesta validação. Busca, período, mapa e indicadores oficiais continuam no backlog de fase 2.
+
+Validação em build local: 287 testes unitários, `npm run db:test`, `npm run typecheck`, `npm run lint` e `npm run build` passaram. Rotas inexistentes testadas responderam 404, `/sobre` e o shell de `/dados` responderam 200, e acesso anônimo ao ambiente fechado foi recusado (401). Por causa de streaming/PPR, o 200 inicial da página de dados não confirma a leitura da view nem o estado final renderizado. Não houve contrato real de staging, teste com NVDA/VoiceOver, Lighthouse/LCP ou confirmação de escrita ponta a ponta.

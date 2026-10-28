@@ -146,6 +146,34 @@ describe("registro HTTP", () => {
   });
 });
 describe("acompanhamento e exclusão", () => {
+  it.each([undefined, "", "x".repeat(44)])("credencial ausente ou malformada mantém resposta neutra e privada: %s", async valor => {
+    const r = await acompanhar(request(valor === undefined ? {} : { token: valor }, {}, "acompanhar"));
+    expect(r.status).toBe(404);
+    expect(r.headers.get("cache-control")).toBe("no-store");
+    expect(r.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(chamadas).toHaveLength(0);
+  });
+  it("sucesso e replay privados não ecoam segredo nem habilitam cache", async () => {
+    for (let tentativa = 0; tentativa < 2; tentativa++) {
+      const r = await acompanhar(request({ token }, {}, "acompanhar"));
+      expect(r.status).toBe(200);
+      expect(r.headers.get("cache-control")).toBe("no-store");
+      expect(JSON.stringify(await r.json())).not.toContain(token);
+    }
+    expect(JSON.stringify(chamadas)).not.toContain(token);
+  });
+  it("limita exclusão antes do RPC e sanitiza logs de falha privada", async () => {
+    limite = false;
+    const r = await excluir(request({ token, confirmacao: true }, {}, "excluir"));
+    expect(r.status).toBe(429);
+    expect(r.headers.get("cache-control")).toBe("no-store");
+    expect(chamadas.some(c => c.url.endsWith("solicitar_exclusao_por_token"))).toBe(false);
+    limite = true; falha = "acompanhar_por_token";
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect((await acompanhar(request({ token }, {}, "acompanhar"))).status).toBe(503);
+    expect(log).toHaveBeenCalledOnce();
+    expect(log.mock.calls.flat().join()).not.toMatch(new RegExp(`${token}|segredo IP|texto privado`));
+  });
   it("hasheia o segredo do POST e devolve DTO sem id/hash", async () => {
     const r = await acompanhar(request({ token }, {}, "acompanhar")); expect(r.status).toBe(200); const dto = await r.json(); expect(dto.protocolo).toBe(dados.out_protocolo); expect(dto.atualizacoes).toEqual([]); expect(dto.respostas).toEqual([]); expect(dto).not.toHaveProperty("id");
     expect(chamadas.find(c => c.url.endsWith("acompanhar_por_token"))!.body.p_token_hash).toMatch(/^\\x[a-f0-9]{64}$/);

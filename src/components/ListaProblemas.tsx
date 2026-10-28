@@ -3,12 +3,13 @@ import {
   listarCategorias,
   listarMunicipios,
   listarProblemas,
+  selecionarMunicipios,
 } from "@/lib/dados/consultas";
-import { lerFiltros, type SearchParamsBrutos } from "@/lib/dados/params";
+import { lerBuscaMunicipio, lerFiltros, type SearchParamsBrutos } from "@/lib/dados/params";
 import { CartaoProblema } from "./CartaoProblema";
 import { EstadoVazio } from "./EstadoVazio";
 
-type Consulta = { municipio?: string; categoria?: string; cursor?: string };
+type Consulta = { municipio?: string; categoria?: string; cursor?: string; nomeMunicipio?: string };
 
 /** Monta "base?municipio=..&categoria=..&cursor=.." só com o que existe. */
 export function montarHref(base: string, q: Consulta): string {
@@ -16,6 +17,7 @@ export function montarHref(base: string, q: Consulta): string {
   if (q.municipio) p.set("municipio", q.municipio);
   if (q.categoria) p.set("categoria", q.categoria);
   if (q.cursor) p.set("cursor", q.cursor);
+  if (q.nomeMunicipio) p.set("nome_municipio", q.nomeMunicipio);
   const s = p.toString();
   return s ? `${base}?${s}` : base;
 }
@@ -46,7 +48,8 @@ export async function ListaProblemas({
   const cursorBruto = Array.isArray(sp.cursor) ? sp.cursor[0] : sp.cursor;
   const municipio = municipioFixo ?? f.municipio;
   const categoria = f.categoria;
-  const [categorias, municipios, pagina] = await Promise.all([
+  const buscaMunicipio = lerBuscaMunicipio(sp.nome_municipio);
+  const [categorias, catalogo, pagina] = await Promise.all([
     listarCategorias(),
     comSeletorDeMunicipio ? listarMunicipios() : Promise.resolve([]),
     // Passa o cursor ainda opaco: a função em cache revalida tudo.
@@ -56,14 +59,33 @@ export async function ListaProblemas({
       cursor: cursorBruto,
     }),
   ]);
+  const selecionado = catalogo.find((m) => m.slug === municipio);
+  const encontrados = selecionarMunicipios(catalogo, buscaMunicipio);
+  const municipios = selecionado && !encontrados.some((m) => m.slug === selecionado.slug)
+    ? [selecionado, ...encontrados] : encontrados;
   const temFiltro = Boolean(municipio ?? categoria);
   const limpar = municipioFixo ? base : "/problemas";
 
   return (
     <>
       {comSeletorDeMunicipio ? (
-        <form method="get" action={base} className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-col">
+        <div className="flex min-w-0 flex-col gap-4">
+        <form method="get" action={base} className="flex min-w-0 flex-wrap items-end gap-3">
+          {municipio ? <input type="hidden" name="municipio" value={municipio} /> : null}
+          {categoria ? <input type="hidden" name="categoria" value={categoria} /> : null}
+          <div className="flex min-w-0 flex-1 flex-col">
+            <label htmlFor="busca-municipio" className="font-semibold">Nome do município</label>
+            <input id="busca-municipio" name="nome_municipio" type="search" maxLength={80}
+              defaultValue={buscaMunicipio} aria-describedby="ajuda-municipio"
+              className="min-h-12 w-full rounded-lg border border-borda bg-fundo px-3" />
+          </div>
+          <button type="submit" className="min-h-12 rounded-lg border border-acao px-4 font-semibold">Buscar município</button>
+        </form>
+        <p id="ajuda-municipio" className="text-sm text-texto-suave">Digite o nome, busque e escolha abaixo. A busca funciona com teclado e sem JavaScript. Até 12 resultados por busca; refine o nome para encontrar outros municípios.</p>
+        {buscaMunicipio ? <p role="status">{encontrados.length ? "Escolha um dos municípios encontrados." : "Nenhum município encontrado. Tente outro nome."}</p> : null}
+        <form method="get" action={base} className="flex min-w-0 flex-wrap items-end gap-3">
+          {buscaMunicipio ? <input type="hidden" name="nome_municipio" value={buscaMunicipio} /> : null}
+          <div className="flex min-w-0 w-full flex-col sm:w-auto">
             <label htmlFor="filtro-municipio" className="font-semibold">
               Município
             </label>
@@ -71,7 +93,7 @@ export async function ListaProblemas({
               id="filtro-municipio"
               name="municipio"
               defaultValue={municipio ?? ""}
-              className="rounded-lg border border-borda bg-fundo px-3"
+              className="min-h-12 w-full max-w-full rounded-lg border border-borda bg-fundo px-3"
             >
               <option value="">Todos os municípios</option>
               {municipios.map((m) => (
@@ -86,9 +108,10 @@ export async function ListaProblemas({
             type="submit"
             className="rounded-lg bg-acao px-5 font-semibold text-sobre-acao hover:bg-acao-escura"
           >
-            Filtrar
+            Aplicar filtros
           </button>
         </form>
+        </div>
       ) : null}
 
       <nav aria-label="Categorias" className="mt-5">
@@ -96,7 +119,10 @@ export async function ListaProblemas({
         <ul className="mt-1 flex flex-wrap gap-2">
           <li>
             <Link
-              href={montarHref(base, { municipio: comSeletorDeMunicipio ? municipio : undefined })}
+              href={montarHref(base, {
+                municipio: comSeletorDeMunicipio ? municipio : undefined,
+                nomeMunicipio: comSeletorDeMunicipio ? buscaMunicipio : undefined,
+              })}
               prefetch={false}
               aria-current={categoria ? undefined : "true"}
               className={categoria ? CLASSE_CHIP : CLASSE_CHIP_ATIVO}
@@ -110,6 +136,7 @@ export async function ListaProblemas({
                 href={montarHref(base, {
                   municipio: comSeletorDeMunicipio ? municipio : undefined,
                   categoria: c.slug,
+                  nomeMunicipio: comSeletorDeMunicipio ? buscaMunicipio : undefined,
                 })}
                 prefetch={false}
                 aria-current={categoria === c.slug ? "true" : undefined}
@@ -130,7 +157,7 @@ export async function ListaProblemas({
       </nav>
 
       <section aria-labelledby="titulo-lista" className="mt-6">
-        <h2 id="titulo-lista" className="sr-only">
+        <h2 id="titulo-lista" tabIndex={-1} className="mb-4 scroll-mt-24">
           Relatos
         </h2>
         {pagina.itens.length === 0 ? (
@@ -163,17 +190,17 @@ export async function ListaProblemas({
         )}
         {pagina.proximoCursor ? (
           <div className="mt-6">
-            <Link
-              href={montarHref(base, {
+            <a
+              href={`${montarHref(base, {
                 municipio: comSeletorDeMunicipio ? municipio : undefined,
                 categoria,
                 cursor: pagina.proximoCursor,
-              })}
-              prefetch={false}
-              className="rounded-lg border border-acao px-5 font-semibold no-underline"
+                nomeMunicipio: comSeletorDeMunicipio ? buscaMunicipio : undefined,
+              })}#titulo-lista`}
+              className="inline-flex min-h-12 items-center rounded-lg border border-acao px-5 font-semibold no-underline"
             >
               Próxima página
-            </Link>
+            </a>
           </div>
         ) : null}
       </section>

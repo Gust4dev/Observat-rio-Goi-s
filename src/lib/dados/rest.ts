@@ -5,6 +5,7 @@ import type { ZodType } from "zod";
 // Sem supabase-js (M2-2). Sempre `select` com lista explícita; query montada com URLSearchParams.
 
 export const RECURSOS_PERMITIDOS = [
+  "v_dados_painel",
   "v_ocorrencias_publicas",
   "v_imagens_publicas",
   "v_atualizacoes_publicas",
@@ -32,7 +33,6 @@ export class ErroRest extends Error {
     this.name = "ErroRest";
   }
 }
-
 export type OpcoesConsulta = {
   /** Colunas explícitas. `*` e nomes fora de [a-z0-9_] são recusados. */
   select: readonly string[];

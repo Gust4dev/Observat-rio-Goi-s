@@ -1,6 +1,8 @@
 "use client";
 
 import Script from "next/script";
+import { AvisoConexao } from "@/components/AvisoConexao";
+import { EtapaFotos, type FotoRegistro } from "./EtapaFotos";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { gerarToken, hashToken, tokenSchema } from "@/lib/registro/token";
 import { LIMITE_DESCRICAO, LIMITE_TITULO } from "@/lib/registro/schemas";
@@ -53,6 +55,8 @@ function mensagens(codigo: string | undefined, status: number): string {
 export function RegistrarForm({ municipios, categorias, siteKey, indisponivel, municipioInicial = "" }: Props) {
   const [campos, setCampos] = useState<Campos>({ ...VAZIO, municipio: municipios.some(m => m.slug === municipioInicial) ? municipioInicial : "" });
   const [etapa, setEtapa] = useState(0);
+  const [fotos, setFotos] = useState<FotoRegistro[]>([]);
+  const [fotosPreparando, setFotosPreparando] = useState(false);
   const [descarte, setDescarte] = useState(false);
   const [salvo, setSalvo] = useState(false);
   const [carregado, setCarregado] = useState(false);
@@ -134,7 +138,9 @@ export function RegistrarForm({ municipios, categorias, siteKey, indisponivel, m
 
   async function enviar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
+    if (fotosPreparando) return;
     if (!validar()) return;
+    if (etapa >= 3 && fotos.some(f => f.contexto.trim().length < 3)) { setErro("Descreva o que cada foto mostra ou remova a foto antes de continuar."); return; }
     if (etapa < 4) { mudarEtapa(etapa + 1); return; }
     if (bloqueado) return;
     if (!captcha) { setErro("Conclua a verificação de segurança antes de enviar."); requestAnimationFrame(() => resumo.current?.focus()); return; }
@@ -196,10 +202,12 @@ export function RegistrarForm({ municipios, categorias, siteKey, indisponivel, m
       </div>
       {mensagemLink && <p role="status" className="mt-3">{mensagemLink}</p>}
     </div>
+    <EtapaFotos fotos={fotos} mudar={setFotos} token={tentativa.token} confirmado />
     <a className="inline-flex min-h-12 items-center font-semibold underline" href={link}>Abrir acompanhamento</a>
   </section>;
 
   return <>
+    <AvisoConexao />
     <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" strategy="afterInteractive" onLoad={() => setCaptchaPronto(true)} onError={() => setErro("A verificação de segurança está indisponível. Tente novamente mais tarde.")} />
     <form onSubmit={enviar} noValidate className="space-y-5">
       <h2 ref={tituloEtapa} tabIndex={-1} aria-live="polite" className="text-xl font-bold">Etapa {etapa + 1} de 5 · {ETAPAS[etapa]}</h2>
@@ -238,14 +246,14 @@ export function RegistrarForm({ municipios, categorias, siteKey, indisponivel, m
           <p id="ajuda-descricao" className="mt-1 text-sm text-texto-suave">{campos.descricao.length}/{LIMITE_DESCRICAO} caracteres</p>{errosCampos.descricao && <p id="erro-descricao" className="text-erro">{errosCampos.descricao}</p>}
         </div>
       </fieldset>
-      {etapa === 3 && <section><h3 className="font-bold">Fotos (opcional)</h3><p>O envio de fotos ainda não está disponível. Você pode continuar sem fotos.</p></section>}
+      {etapa === 3 && <EtapaFotos fotos={fotos} mudar={setFotos} aoPreparar={setFotosPreparando} />}
       {etapa === 4 && <section className="space-y-3"><h3 className="font-bold">Registro anônimo · confira seu relato</h3><p>Não coletamos nome, telefone ou contato. Seu relato será analisado antes de aparecer no site.</p><dl className="space-y-2 break-words"><dt className="font-semibold">Município</dt><dd>{municipios.find(m => m.slug === campos.municipio)?.nome}</dd><dt className="font-semibold">Categoria</dt><dd>{categorias.find(c => c.slug === campos.categoria)?.nome}</dd><dt className="font-semibold">Título</dt><dd>{campos.titulo}</dd><dt className="font-semibold">Descrição</dt><dd className="whitespace-pre-wrap">{campos.descricao}</dd></dl></section>}
       <p className="rounded-controle bg-neutro-fundo p-4">Não inclua nomes, telefones, documentos ou endereço residencial. Você não precisa informar nome ou contato. Seu relato será analisado antes de aparecer no site.</p>
       <p className="text-sm text-texto-suave">Os dados e a chave da tentativa ficam salvos neste aparelho até o envio ser confirmado. Em aparelho compartilhado, considere isso antes de continuar.</p>
       <div hidden={etapa !== 4} className="min-h-16" aria-label="Verificação de segurança"><div ref={captchaEl} />{!siteKey && <p className="text-sm text-texto-suave">A verificação de segurança está indisponível.</p>}</div>
-      {etapa > 0 && <button type="button" disabled={estado === "enviando"} className="min-h-12 w-full rounded-controle border border-borda px-5 font-semibold" onClick={() => mudarEtapa(etapa - 1)}>Voltar à etapa anterior</button>}
+      {etapa > 0 && <button type="button" disabled={estado === "enviando" || fotosPreparando} className="min-h-12 w-full rounded-controle border border-borda px-5 font-semibold" onClick={() => mudarEtapa(etapa - 1)}>Voltar à etapa anterior</button>}
       {etapa === 4 && !captcha && !bloqueado && <p id="motivo-envio">Conclua a verificação de segurança para enviar.</p>}
-      <button type="submit" aria-describedby={etapa === 4 && !captcha && !bloqueado ? "motivo-envio" : undefined} disabled={estado === "enviando" || estado === "sucesso" || (etapa === 4 && (bloqueado || !captcha))} className="min-h-12 w-full rounded-controle bg-acao px-5 font-bold text-sobre-acao disabled:cursor-not-allowed disabled:opacity-60">
+      <button type="submit" aria-describedby={etapa === 4 && !captcha && !bloqueado ? "motivo-envio" : undefined} disabled={fotosPreparando || estado === "enviando" || estado === "sucesso" || (etapa === 4 && (bloqueado || !captcha))} className="min-h-12 w-full rounded-controle bg-acao px-5 font-bold text-sobre-acao disabled:cursor-not-allowed disabled:opacity-60">
         {etapa < 4 ? "Continuar" : estado === "enviando" ? "Enviando relato…" : estado === "erro" ? "Tentar novamente" : "Enviar relato"}
       </button>
     </form>

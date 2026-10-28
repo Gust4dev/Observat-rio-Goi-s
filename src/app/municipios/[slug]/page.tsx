@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -29,12 +30,15 @@ export default async function PaginaMunicipio(props: PageProps<"/municipios/[slu
   const m = await obterMunicipio(slug);
   if (!m) notFound();
 
+  if (!m.ativo_acompanhamento) return (
+    <div className="flex min-w-0 flex-col gap-5"><header><h1>{m.nome}</h1></header><p>Ainda não acompanhamos relatos neste município</p><p className="text-texto-suave">Isso não significa ausência de problemas. Não há prazo de início de acompanhamento definido.</p><Link href={`/registrar?municipio=${m.slug}`} prefetch={false} className="inline-flex min-h-12 items-center self-start rounded-lg bg-acao px-5 font-semibold text-sobre-acao no-underline">Registrar um problema</Link></div>
+  );
   return (
     <div className="flex flex-col gap-5">
       <header>
         <h1>{m.nome}</h1>
         <p className="mt-2 text-texto-suave">
-          {m.total === 1 ? "1 relato publicado" : `${m.total} relatos publicados`} neste município
+          {m.total === 0 ? "Sem relatos publicados" : m.total === 1 ? "1 relato publicado neste município" : `${m.total} relatos publicados neste município`}
         </p>
       </header>
       <AvisoMetodologico />

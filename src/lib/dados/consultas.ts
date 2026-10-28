@@ -3,7 +3,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import { consultar, type OpcoesConsulta } from "./rest";
 import {
   atualizacaoSchema, categoriaSchema, imagemSchema, indicadoresGeraisSchema, indicadorMunicipioCategoriaSchema,
-  municipioSchema, problemaDetalheSchema, problemaListaSchema, respostaSchema,
+  municipioCoberturaSchema, COLUNAS_MUNICIPIO_COBERTURA, municipioSchema, problemaDetalheSchema, problemaListaSchema, respostaSchema,
   COLUNAS_ATUALIZACAO, COLUNAS_CATEGORIA, COLUNAS_IMAGEM, COLUNAS_INDICADORES_GERAIS,
   COLUNAS_INDICADOR_MUNICIPIO_CATEGORIA, COLUNAS_MUNICIPIO, COLUNAS_PROBLEMA_DETALHE, COLUNAS_PROBLEMA_LISTA,
   COLUNAS_RESPOSTA,
@@ -11,7 +11,7 @@ import {
   type ProblemaLista, type Resposta,
 } from "./schemas";
 import {
-  codificarCursor, decodificarCursor, idSchema, lerFiltros, slugSchema, TAMANHO_PAGINA,
+  codificarCursor, decodificarCursor, idSchema, lerBuscaMunicipio, lerFiltros, slugSchema, TAMANHO_PAGINA,
   type Cursor, type Filtros,
 } from "./params";
 
@@ -134,7 +134,7 @@ export async function obterProblema(id: string): Promise<{
   return { problema, imagens, atualizacoes, respostas };
 }
 
-export async function obterMunicipio(slug: string): Promise<{ slug: string; nome: string; total: number } | null> {
+export async function obterMunicipio(slug: string): Promise<{ slug: string; nome: string; total: number; ativo_acompanhamento: boolean } | null> {
   "use cache";
   cacheLife("minutes");
   const v = slugSchema.safeParse(slug);
@@ -144,8 +144,8 @@ export async function obterMunicipio(slug: string): Promise<{ slug: string; nome
   const [municipios, contagens] = await Promise.all([
     consultar(
       "municipios",
-      { select: COLUNAS_MUNICIPIO, filtros: [["slug", `eq.${v.data}`]], limite: 1 },
-      municipioSchema,
+      { select: COLUNAS_MUNICIPIO_COBERTURA, filtros: [["slug", `eq.${v.data}`]], limite: 1 },
+      municipioCoberturaSchema,
     ),
     consultar(
       "v_indicadores_municipio_categoria",
@@ -155,7 +155,7 @@ export async function obterMunicipio(slug: string): Promise<{ slug: string; nome
   ]);
   const m = municipios[0];
   if (!m) return null;
-  return { slug: m.slug, nome: m.nome, total: contagens.reduce((s, c) => s + c.total, 0) };
+  return { slug: m.slug, nome: m.nome, ativo_acompanhamento: m.ativo_acompanhamento, total: contagens.reduce((s, c) => s + c.total, 0) };
 }
 
 export async function listarMunicipios(): Promise<Municipio[]> {
@@ -167,6 +167,18 @@ export async function listarMunicipios(): Promise<Municipio[]> {
     { select: COLUNAS_MUNICIPIO, ordem: [{ coluna: "nome", direcao: "asc" }], limite: 300 },
     municipioSchema,
   );
+}
+
+/** Filtra no servidor sobre o catálogo em cache, sem interpolar texto em PostgREST. */
+export function selecionarMunicipios<T extends { nome: string; slug: string }>(municipios: T[], entrada: unknown): T[] {
+  const normalizar = (nome: string) => nome.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+  const busca = normalizar(lerBuscaMunicipio(entrada));
+  if (!busca) return [];
+  return municipios.filter((m) => normalizar(m.nome).includes(busca)).slice(0, 12);
+}
+
+export async function pesquisarMunicipios(nome: string): Promise<Municipio[]> {
+  return selecionarMunicipios(await listarMunicipios(), nome);
 }
 
 export async function listarCategorias(): Promise<Categoria[]> {
@@ -210,4 +222,25 @@ export async function indicadoresGerais(): Promise<IndicadoresGerais | null> {
     indicadoresGeraisSchema,
   );
   return linha ?? null;
+}
+
+/** Página completa por cursor de id, sem truncar em 300 relatos. */
+export async function obterDadosPainel(entrada: {municipio?:string;categoria?:string} = {}) {
+  'use cache';
+  cacheLife('minutes');
+  cacheTag('indicadores','problemas');
+  const { dadoPainelSchema, COLUNAS_DADO_PAINEL } = await import('./schemas');
+  const f=lerFiltros(entrada);
+  const itens: import('./schemas').DadoPainel[]=[];
+  let ultimo:string|undefined;
+  for (;;) {
+    const filtros:[string,string][]=[];
+    if(f.municipio) filtros.push(['municipio_slug',`eq.${f.municipio}`]);
+    if(f.categoria) filtros.push(['categoria_slug',`eq.${f.categoria}`]);
+    if(ultimo) filtros.push(['id',`gt.${idSchema.parse(ultimo)}`]);
+    const lote=await consultar('v_dados_painel',{select:COLUNAS_DADO_PAINEL,filtros,ordem:[{coluna:'id',direcao:'asc'}],limite:300},dadoPainelSchema);
+    itens.push(...lote);
+    if(lote.length<300) return itens;
+    ultimo=lote[lote.length-1].id;
+  }
 }
