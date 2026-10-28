@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import catalogo from '@/lib/mapa/municipios.json';
 import { pontoInterior, lerGeometria, destinoMunicipio, textoPainel } from '@/lib/mapa/geometria';
 import { MapaGoias } from './MapaGoias';
+vi.mock('next/navigation',()=>({useRouter:()=>({push:()=>{}})}));
 const svg=readFileSync('public/mapas/goias-municipios.svg','utf8');
 describe('mapa municipal',()=>{
  it('preserva 246 códigos do catálogo e todos têm alvo interior ampliável sem colisão',()=>{
@@ -32,5 +33,17 @@ describe('mapa municipal',()=>{
   expect(html.indexOf('role="status"')).toBeLessThan(html.indexOf('<img '));
   expect(html).toContain('Geometria simplificada');expect(html).not.toContain('tabindex="0"');
  });
-});
 
+ it('SSR: instruções, controles rotulados, parâmetros mantidos e sem estado antigo',()=>{
+  const html=renderToStaticMarkup(createElement(MapaGoias,{municipios:catalogo,municipioSelecionado:'goiania',painel:{estado:'disponivel',total:3,ativoAcompanhamento:true},parametros:{categoria:'saude',municipio:'x'}}));
+  expect(html).toContain('Toque em um município para selecioná-lo. Use + e − para aproximar ou arraste para explorar. O seletor também permite escolher pelo nome.');
+  for(const nome of ['Ampliar mapa','Reduzir mapa','Mostrar Goiás inteiro'])expect(html).toContain(`aria-label="${nome}"`);
+  expect(html).toContain('<input type="hidden" name="categoria" value="saude"/>');expect(html).not.toContain('name="municipio" value="x"');
+  expect(html).toContain('3 relatos publicados');expect(html).toContain('Goiânia');
+  expect(html).not.toContain('touch-action');expect(html).not.toContain('requestSubmit');
+ });
+ it('SSR: sem município inicial não há seleção nem contagem', ()=>{
+  const html=renderToStaticMarkup(createElement(MapaGoias,{municipios:catalogo}));
+  expect(html.match(/<option /g)).toHaveLength(247);expect(html.match(/selected=""/g)).toHaveLength(1);expect(html).toContain('<option value="" selected="">');expect(html).toContain('Escolha um município para consultar');
+ });
+});

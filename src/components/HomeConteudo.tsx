@@ -4,6 +4,7 @@ import { CartaoProblema } from "./CartaoProblema";
 import { EstadoVazio } from "./EstadoVazio";
 import { SeloDemonstracao } from "./SeloDemonstracao";
 import { MapaGoias } from "./MapaGoias";
+import { PassosInicio } from "./PassosInicio";
 import { indicadoresGerais, listarMunicipios, obterMunicipio, ultimosProblemas } from "@/lib/dados/consultas";
 import { lerFiltros, type SearchParamsBrutos } from "@/lib/dados/params";
 import type { PainelMunicipio } from "@/lib/mapa/geometria";
@@ -41,7 +42,7 @@ export async function HomeConteudo({ searchParams }: { searchParams: Promise<Sea
       <p className="mt-3 text-sm text-texto-suave">{selecionado ? `Município selecionado: ${selecionado.nome}.` : "Escolha seu município no mapa ou na lista para consultar os relatos da sua cidade."}</p>
       <p className="mt-2 text-sm text-texto-suave">Não é canal oficial de atendimento.</p>
     </section>
-    <div className="min-w-0 border-t border-borda-suave pt-6 md:border-t-0 md:pt-0">
+    <div className="min-w-0 w-full rounded-2xl border border-borda-suave bg-superficie p-4 sm:p-6 md:max-w-xl md:justify-self-end">
       <h2 className="mb-4">Explore seu município</h2>
       <MapaGoias municipios={municipios} municipioSelecionado={selecionado?.slug} painel={painel} demonstracao={Boolean(indicadores || recentes.length)} />
     </div>
@@ -49,7 +50,7 @@ export async function HomeConteudo({ searchParams }: { searchParams: Promise<Sea
     <section aria-labelledby="titulo-numeros" className="border-t border-borda-suave pt-8"><h2 id="titulo-numeros">Números da plataforma</h2><div className="my-4"><AvisoMetodologico /></div>
       {numeros.length ? <><SeloDemonstracao /><dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-6 lg:grid-cols-4">{numeros.map(n => <div key={n.texto} className="border-l-2 border-borda-suave pl-4"><dt className="text-sm text-texto-suave">{n.texto}</dt><dd className="mt-1 text-3xl font-bold tracking-tight tabular-nums">{n.valor.toLocaleString("pt-BR")}</dd></div>)}</dl></> : <EstadoVazio titulo="Ainda não há indicadores disponíveis" texto="Os números aparecerão quando houver dados agregados disponíveis." />}
     </section>
-    <section aria-labelledby="titulo-recentes"><h2 id="titulo-recentes">Relatos recentes</h2>{recentes.length ? <><ul>{recentes.map(p => <li key={p.id}><CartaoProblema id={p.id} titulo={p.titulo} municipioNome={p.municipio_nome} categoriaNome={p.categoria_nome} situacao={p.situacao} publicadoEm={p.publicado_em} temRespostaOficial={p.tem_resposta_oficial} variante="lista" demonstracao /></li>)}</ul><Link prefetch={false} href="/problemas" className="inline-flex min-h-12 items-center font-semibold">Ver todos os relatos</Link></> : <EstadoVazio titulo="Ainda não há relatos publicados" texto="Quando houver relatos publicados, os mais recentes aparecem aqui." />}</section>
-    <section aria-labelledby="titulo-como" className="border-t border-borda-suave pt-8"><h2 id="titulo-como">Como funciona</h2><ol className="mt-4 list-decimal space-y-4 pl-6"><li><strong>Registre.</strong> Escolha o município e descreva o problema.</li><li><strong>Guarde o protocolo.</strong> Use o acesso privado para acompanhar seu envio.</li><li><strong>Acompanhe.</strong> Consulte a situação e as atualizações disponíveis.</li></ol></section>
+    <section aria-labelledby="titulo-recentes"><h2 id="titulo-recentes">Relatos recentes</h2>{recentes.length ? <><ul className="mt-4 grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">{recentes.map(p => <li key={p.id} className="min-w-0"><CartaoProblema id={p.id} titulo={p.titulo} municipioNome={p.municipio_nome} categoriaNome={p.categoria_nome} categoriaSlug={p.categoria_slug} situacao={p.situacao} publicadoEm={p.publicado_em} temRespostaOficial={p.tem_resposta_oficial} variante="home" demonstracao /></li>)}</ul><Link prefetch={false} href="/problemas" className="mt-4 inline-flex min-h-12 items-center font-semibold">Ver todos os relatos</Link></> : <EstadoVazio titulo="Ainda não há relatos publicados" texto="Quando houver relatos publicados, os mais recentes aparecem aqui." />}</section>
+    <section aria-labelledby="titulo-como" className="border-t border-borda-suave pt-8"><h2 id="titulo-como">Como funciona</h2><PassosInicio /></section>
   </div>;
 }

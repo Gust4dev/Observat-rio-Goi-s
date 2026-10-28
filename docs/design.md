@@ -315,6 +315,15 @@ Hierarquia: promessa → escolha de município e ação → limite do serviço �
 
 Os valores `28` e `6` são exemplos e devem estar cobertos por “Dados de demonstração” em cada bloco; se não houver dados reais/demonstrativos carregados, esconder os números e mostrar estado vazio. **768/1280:** promessa, seletor e ação à esquerda; mapa e resumo municipal adjacente à direita, sem proporção fixa 7/5 e sem painel flutuante. Métricas com nota abaixo, relatos recentes com hierarquia variada e passos compactos depois. Ação secundária “Ver relatos deste município” acompanha a seleção. Preservar SSR, links atuais e aviso de canal não oficial.
 
+**Mapa interativo e componentes da home (implementado).**
+
+- **Seleção direta:** um toque ou clique em um polígono seleciona o município no mesmo gesto. Seletor, contorno do polígono, resumo e URL (`?municipio=<slug>#territorio`, navegação client-side) usam um único estado. Durante a navegação o resumo mostra “Carregando relatos de {município}…”; falha mostra indisponibilidade, nunca zero.
+- **Câmera independente:** zoom e pan não alteram a seleção, e selecionar não move a câmera. Controles “Ampliar mapa”, “Reduzir mapa” e “Mostrar Goiás inteiro” (48 px). Pan por arrasto com limiar de 8 px (arrasto nunca seleciona), pinça e roda do mouse com ponto focal; `touch-action: none` só no SVG, então a rolagem da página fora dele segue normal.
+- **Teclado:** o SVG é uma única parada de Tab; setas escolhem um candidato, Enter seleciona, Esc restaura o enquadramento sem limpar o município, `+`/`−` aproximam. O seletor continua sendo o caminho mais preciso.
+- **Sem JavaScript ou SVG indisponível:** o seletor GET com 246 municípios e a ação principal continuam funcionando; o mapa mostra aviso de indisponibilidade.
+- **Relatos recentes:** `CartaoProblema` variante `home` (ícone de categoria, demonstração, município, situação, data, resposta oficial se houver, botão “Ver relato”), em grade de 1 coluna (360), 2 (768) e 3 (1280). Sem resumo inventado e sem carrossel.
+- **Como funciona:** `PassosInicio`, três passos 01/02/03 ligados por linha fina, com cenas SVG locais esquemáticas que ilustram só controles existentes.
+
 ### `/problemas`
 
 Hierarquia: H1 e resumo → filtros → quantidade → aviso metodológico visível → lista → paginação.
