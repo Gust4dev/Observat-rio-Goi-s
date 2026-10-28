@@ -45,3 +45,10 @@ Formato: contexto → decisão → alternativas → consequências. Status: Prop
 ## ADR-0005 — Moderação em dois eixos (Proposta, 2026-10-26)
 - **Decisão:** separar `situacao` (andamento) de `moderacao` (publicação); remoção como *soft delete* com motivo e histórico *append-only*.
 - **Consequências:** permite auditoria e um registro público de remoções, caso a política decida por isso.
+
+## Decisão M3 — CSP e código privado (adotada no código, 2026-10-27)
+- **Contexto:** o formulário precisa do Turnstile e o shell de leitura usa Cache Components/PPR. Nonce global tornaria a renderização dinâmica; SRI experimental só acrescentou integridade a scripts externos no build observado, mantendo bootstrap/RSC inline.
+- **Decisão:** manter a CSP compatível com o shell, com `unsafe-inline` registrado como risco residual. Liberar `https://challenges.cloudflare.com` em `script-src` e `frame-src` apenas em `/registrar`; usar `no-referrer` no registro/acompanhamento. Não ativar SRI experimental sem benefício comprovado para os scripts inline.
+- **Alternativas rejeitadas:** nonce global (quebra o modelo de prerenderização) e afirmar CSP estrita só por habilitar SRI (não cobre o bootstrap inline observado).
+- **Consequências:** conteúdo de cidadão deve permanecer como texto escapado; política estrita exige revisão de arquitetura/renderização futura. O registro envia somente SHA-256 do código gerado no navegador; acompanhamento/exclusão usam POST e segredo no fragmento do link.
+- **Fontes:** guia instalado `node_modules/next/dist/docs/01-app/02-guides/content-security-policy.md`; [Cloudflare CSP](https://developers.cloudflare.com/turnstile/reference/content-security-policy/); [Vercel headers](https://vercel.com/docs/headers/request-headers) para origem confiável na plataforma.

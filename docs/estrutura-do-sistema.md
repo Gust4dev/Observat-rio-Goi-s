@@ -398,3 +398,19 @@ Ordenadas pelo custo de descobrir tarde.
 
 Próximo passo natural: construir as 4 rotas do M2 na ordem do plano (detalhe → lista → município → home) e, em paralelo,
 escrever `docs/design.md` com os wireframes (lacuna 1).
+
+## 19. Atualização do M3 — registro e acompanhamento
+
+Estado em 2026-10-27: **implementado no código e pronto para revisão**, conforme [`plano-m3.md`](plano-m3.md). A seção 18 preserva o inventário anterior ao M3; esta seção registra o estado atual das rotas.
+
+| Parte | Contrato M3 |
+|---|---|
+| Registro | `/registrar` e `POST /api/registrar`: município, categoria, título e descrição; anônimo, sem fotos/contato; Turnstile, validação, triagem, limite e idempotência no servidor |
+| Link privado | Código gerado no navegador; somente SHA-256 segue no registro; `/acompanhar#<código>` lê fragmento no cliente e envia segredo apenas por POST |
+| Acompanhamento | Situação, revisão, datas, atualizações visíveis e respostas publicadas, via função de banco restrita; ausência/invalidez sem revelar existência |
+| Exclusão | Confirmação explícita antes de `solicitar_exclusao_por_token`; texto substituído por marcador e auditoria mantida; sem prometer fila humana |
+| Degradação | Sem JavaScript, explicar a geração/leitura do código e não enviar sem credencial; leitura pública continua acessível |
+| CSP | Cloudflare permitido só no registro; nonce global rejeitado por incompatibilidade com PPR. Experimento SRI passou build mas manteve scripts inline; `unsafe-inline` permanece como risco documentado |
+| Validação | Suítes unitária, banco/PGlite, TypeScript, lint, build e contrato staging aprovadas; comportamento real de escrita depende da configuração do ambiente |
+
+O marco não inclui fotos, painel administrativo, denúncias, confirmações, direito de resposta, indicadores, busca, analytics ou abertura pública. As mudanças visuais amplas do mapa continuam fora do M3.

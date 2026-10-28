@@ -56,7 +56,7 @@ rotação de chave. Se o limite de corpo for problema, comprimir no cliente (se�
 ### 3.1 Cidadão (sem conta) — `POST /api/...`
 | Endpoint | Função | Banco |
 |---|---|---|
-| `/api/registrar` | Cria ocorrência (+ fotos, + contato opcional) | `registrar_ocorrencia`, `registrar_imagem`* |
+| `/api/registrar` | M3: cria relato anônimo sem fotos/contato | `registrar_ocorrencia` |
 | `/api/acompanhar` | Estado privado da própria ocorrência | `acompanhar_por_token` |
 | `/api/excluir` | Apaga contato e, se pedido, o conteúdo | `solicitar_exclusao_por_token` |
 | `/api/denunciar` | Denuncia conteúdo público | `registrar_denuncia` |
@@ -67,34 +67,27 @@ rotação de chave. Se o limite de corpo for problema, comprimir no cliente (se�
 
 Regras comuns a todos:
 1. Valida o corpo com um esquema (ex.: Zod): tipos, tamanhos, formatos. Rejeita campos desconhecidos.
-2. Verifica **Turnstile** (exceto `acompanhar`, que já exige o token) e **limite de taxa**.
+2. Verifica **Turnstile** no registro; acompanhamento e exclusão autenticam pelo token. Todas aplicam **limite de taxa**.
 3. Só então chama o banco. O cliente **nunca** escolhe `moderacao`, `situacao`, `verificado` nem `protocolo`.
 4. Resposta de erro uniforme: `{ "erro": { "codigo": "...", "mensagem": "..." } }`; sem detalhes internos.
 5. Nenhum dado pessoal em logs, nem em URL ou query string.
 6. CORS restrito à origem do site.
 
-### 3.2 `POST /api/registrar` em detalhe
-**Entrada** (multipart): `municipio` (slug), `categoria` (slug), `titulo`, `descricao`, `anonimo` (bool),
-`nome?`, `whatsapp?`, `consentimento` (bool), `token` (43 caracteres base64url, gerado no cliente),
-`chave_idempotencia` (uuid, gerado no cliente), `turnstile`, `fotos[0..3]`.
+### 3.2 `POST /api/registrar` em detalhe — M3
 
-**Passos**
-1. Valida esquema; `anonimo = true` com `nome`/`whatsapp` presente → `422`.
-2. Normaliza WhatsApp para `+55DDDNÚMERO`; rejeita formato inválido.
-3. Turnstile + limite de taxa (chave = HMAC do IP+UA com segredo; nunca o IP em claro).
-4. Resolve `municipio`/`categoria` por slug → ids (cache em memória).
-5. **Fotos:** valida tipo pelos bytes (não pela extensão), tamanho; reencoda com `sharp` (remove EXIF/GPS,
-   limita a 1600 px); falha em qualquer foto → `422` sem criar nada.
-6. **Triagem** (seção 6) decide `pendente | publicado | retido`.
-7. Chama `registrar_ocorrencia(..., sha256(token), moderacao)`.
-8. Sobe as fotos já limpas para `imagens-quarentena` e chama `registrar_imagem` por foto.
-9. Responde `201 { protocolo, url_acompanhar }`. O token **não** volta na resposta (o cliente já o tem).
+Entrada JSON estrita: `municipio` (slug), `categoria` (slug), `titulo`, `descricao`, `token_hash` (SHA-256 hexadecimal), `chave_idempotencia` (UUID) e `turnstile`. O M3 não recebe fotos, contato, `anonimo`, `moderacao` ou `situacao`; o servidor envia anonimato verdadeiro ao banco. Fotos ficam para M4 e contato exige decisão própria.
 
-**Idempotência:** celular em rede ruim repete requisições. Com `chave_idempotencia`, a repetição devolve o mesmo
-protocolo em vez de criar duplicata. O token é gerado no cliente justamente para a repetição ser segura.
+1. Valida origem, tipo/tamanho de corpo, JSON e esquema; limites e Unicode são verificados no servidor.
+2. Verifica Turnstile server-side e consome limite por endpoint/origem HMAC; IP puro não é guardado. Na Vercel, usa somente header sobrescrito pela plataforma; runtime genérico não confia em header arbitrário.
+3. Resolve slugs de município/categoria para IDs e consulta `triagem_sinais`.
+4. Define moderação a partir de `MODO_PUBLICACAO`, com `moderar_tudo` por padrão, e chama `registrar_ocorrencia` com o hash que veio do navegador.
+5. Responde só protocolo e confirmação. O navegador já tem o segredo e constrói `/acompanhar#<token>`; o token nunca vai no registro nem volta na resposta.
 
-**Falha parcial:** se o upload de uma foto falhar depois de a ocorrência existir, responde `201` com
-`fotos_falharam: n` e a UI avisa. A ocorrência não se perde por causa de uma foto.
+**Gate da Task 4.1 (prevalece sobre o modo automático descrito acima):** `POST /api/registrar` exige `AMBIENTE_REGISTRO=staging_ficticio` no servidor e `MODO_PUBLICACAO=moderar_tudo` (também é o padrão quando vazio). Sempre grava `pendente`; `texto_automatico` responde 503 antes de qualquer rede. `VERCEL_ENV=production` fica bloqueado mesmo com opt-in. Na Vercel, só preview com usuário/senha de staging configurados; o proxy exige autenticação básica. Fora da Vercel, somente origem loopback em dev/start com opt-in. Configurar somente banco separado de staging e usar exclusivamente relatos fictícios; a flag não comprova a proveniência dos dados nem aprova produção.
+
+**Idempotência:** o navegador conserva token e UUID durante retries. Mesma chave e mesmo hash retornam o mesmo protocolo; chave com outro hash é recusada sem revelar protocolo. Resposta perdida após gravação é tratada como resultado ainda não confirmado, permitindo repetir a mesma tentativa.
+
+**Indisponibilidade:** sem configuração obrigatória do servidor, as APIs falham fechadas com 503 e mensagem genérica; a UI preserva a tentativa e mostra indisponibilidade. Sem JavaScript, registro e acompanhamento explicam a dependência do código privado no cliente e não fazem envio sem credencial.
 
 ### 3.3 Demais operações
 - **`acompanhar`:** recebe o token, hasheia (`sha256`) e chama `acompanhar_por_token`. Devolve situação, estado de
@@ -157,20 +150,19 @@ tags Open Graph do HTML inicial. Por isso as páginas públicas são **renderiza
 as listagens públicas são lidas no servidor para controlar cache e não depender do navegador.
 
 ## 6. Triagem automática (antes da moderação humana)
-Decide só o estado inicial; **não** é veredito. Modo configurável por variável de ambiente, para que a política de publicação possa mudar sem
-alterar código:
+Decide só o estado inicial; **não** é veredito. Neste marco, o registro aceita exclusivamente `moderar_tudo`, com o gate de staging fictício da seção 3.2. Publicação automática depende de aprovação jurídica/operacional e implementação futura; alterar a variável não a habilita:
 
 | `MODO_PUBLICACAO` | Texto sem foto | Com foto |
 |---|---|---|
 | `moderar_tudo` | `pendente` | `pendente` |
-| `texto_automatico` | `publicado` se passar na triagem, senão `retido` | `pendente` |
+| `texto_automatico` | Bloqueado: registro responde 503 | Bloqueado; fotos fora do M3 |
 
-Sinais de **retenção** (`retido`): dados pessoais óbvios (CPF, CNPJ, e-mail, telefone no texto), links, termos de
+Sinais de **retenção** (`retido`) propostos para uma política futura, ainda inativa no registro M3: dados pessoais óbvios (CPF, CNPJ, e-mail, telefone no texto), links, termos de
 uma lista de bloqueio (ameaças, ofensas), texto em caixa alta, texto muito repetido ou idêntico a outro recente,
 envio vindo de uma origem já sinalizada. A lista e os pesos ficam no servidor e **não** são documentados
 publicamente. Falso positivo é aceitável: vai para a fila, não para o lixo.
 
-Padrão recomendado até a revisão jurídica da política de publicação: `moderar_tudo`.
+Único modo aceito neste marco: `moderar_tudo`; não há publicação automática enquanto os gates de aprovação estiverem pendentes.
 
 ## 7. Anti-abuso
 - **Turnstile** em registro, denúncia, "também me afeta" e resposta.
@@ -197,7 +189,7 @@ Padrão recomendado até a revisão jurídica da política de publicação: `mod
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | cliente e servidor | públicas |
 | `SUPABASE_SERVICE_ROLE_KEY` | **só servidor** | nunca em código, repositório ou navegador; rotacionar |
 | `TURNSTILE_SECRET`, `HMAC_SEGREDO` | só servidor | sal diário derivado do segredo |
-| `MODO_PUBLICACAO` | servidor | `moderar_tudo` \| `texto_automatico` |
+| `MODO_PUBLICACAO` | servidor | Registro M3 aceita somente `moderar_tudo`; `texto_automatico` responde 503 |
 | limites de taxa, lista de bloqueio | servidor | não documentar valores |
 
 Ambientes: **local** (Supabase CLI), **staging** (projeto Supabase separado, **sem dados reais**), **produção**.
