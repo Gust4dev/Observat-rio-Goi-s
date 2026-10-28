@@ -43,13 +43,13 @@ describe("destino atual e navegação móvel", () => {
 
 
 describe("identidade e espaço seguro do shell", () => {
-  it("combina símbolo decorativo e nome visível em um único link inicial", () => {
+  it("usa a marca completa em um único link inicial sem nome digitado duplicado", () => {
     const html = renderToStaticMarkup(createElement(Cabecalho, { pathname: "/" }));
     const marca = html.match(/<a[^>]*class="shell-wordmark"[^>]*>(.*?)<\/a>/)?.[1];
     expect(marca).toBeDefined();
-    expect(marca).toContain("observatorio-simbolo.webp");
-    expect(marca).toContain('alt=""');
-    expect(marca).toContain("Observat\u00f3rio <span>Goi\u00e1s</span>");
+    expect(marca).toContain("observatorio-completa.webp");
+    expect(marca).toContain('alt="Observat\u00f3rio Goi\u00e1s"');
+    expect(marca).not.toContain("<span");
   });
   it("usa a marca completa como link acessível no rodapé sem nome visível duplicado", () => {
     const html = renderToStaticMarkup(createElement(Rodape));

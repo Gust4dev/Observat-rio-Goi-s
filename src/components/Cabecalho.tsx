@@ -20,7 +20,7 @@ export function ItemNavegacao({ nome, href, pathname, destaque = false }: {
 export function Cabecalho({ pathname }: { pathname: string }) {
   return <header className="shell-cabecalho">
     <div className="shell-largura flex flex-wrap items-center justify-between gap-x-6 py-3">
-      <Link href="/" className="shell-wordmark"><Image src="/brand/observatorio-simbolo.webp" alt="" width={578} height={560} sizes="40px" className="shell-simbolo" /><span className="shell-nome">Observatório <span>Goiás</span></span></Link>
+      <Link href="/" className="shell-wordmark"><Image src="/brand/observatorio-completa.webp" alt="Observatório Goiás" width={1551} height={564} sizes="(max-width: 320px) 90vw, 288px" /></Link>
       <nav aria-label="Principal" className="shell-nav-desktop">
         {destinos.map((destino) => <ItemNavegacao key={destino.nome} {...destino} pathname={pathname} destaque={destino.nome === "Registrar problema"} />)}
       </nav>

@@ -47,13 +47,13 @@ Seis lentes foram usadas: serviço cívico, pesquisa de campo, acessibilidade, j
 
 Usar os arquivos raster aprovados de `public/brand/`, preservando proporções e cores; `public/LogoObservatorio.png` permanece como fonte original inalterada. As variantes PNG/WebP/JPG são imagens raster, não vetores. Não redesenhar o emblema nem substituir a marca pelo antigo wordmark tipográfico provisório.
 
-- **Cabeçalho compacto:** `observatorio-simbolo.webp` junto ao nome visível “Observatório Goiás”, no link para Início. O símbolo é decorativo quando acompanha esse texto; o nome acessível aparece uma única vez. Manter o nome legível e o foco visível nas larguras estreitas.
+- **Cabeçalho:** `observatorio-completa.webp` como imagem única maior no link para Início, sem nome digitado ao lado. Usar texto alternativo “Observatório Goiás” e largura responsiva, preservando proporção, foco visível e espaço para a navegação.
 - **Rodapé:** `observatorio-completa.webp`, sem nome do site repetido ao lado; texto alternativo “Observatório Goiás”. Preservar os textos de serviço e links institucionais.
 - **Prévia padrão do site:** `observatorio-completa.png` em tela clara de 1200 × 630, sem texto adjacente que duplique o nome já presente na arte.
 - **Ícones de navegador e instalação:** somente o símbolo de `observatorio-simbolo.png`, incluindo favicon, ícone geral e Apple icon; favicon em formato ICO real, sem renomear bytes PNG. O título do documento continua “Observatório Goiás”.
 - **Prévia de relato:** acrescentar o símbolo à composição dinâmica, preservando nome do site, categoria, município, título e situação; manter título e descrição específicos também no Twitter. Não substituir a ficha por uma logo estática.
 
-As artes só estão aprovadas para superfícies claras. Não há versão invertida aprovada: não recolorir para fundos escuros nem inventar uma variante. A versão completa tem assinatura pequena demais para o cabeçalho compacto; usar ali símbolo e texto legível.
+As artes só estão aprovadas para superfícies claras. Não há versão invertida aprovada: não recolorir para fundos escuros nem inventar uma variante. No cabeçalho, dimensionar a versão completa de modo responsivo; a assinatura pequena é secundária e não deve exigir texto duplicado ao lado da arte.
 
 ### Paleta
 
@@ -165,9 +165,9 @@ Componentes interativos suportam: padrão, foco visível, pressionado/selecionad
 
 | Componente | Variações e comportamento | Não fazer |
 |---|---|---|
-| Cabeçalho | Mobile: símbolo com nome visível “Observatório Goiás” no link Início, botão menu rotulado “Abrir navegação” se necessário; desktop: Início, Problemas, Dados, Municípios e ação “Registrar problema”. Link “Pular para o conteúdo” aparece no foco. Estado ativo com texto e sublinhado/indicador. | Não usar menu que exige JS para descobrir as rotas; não ocultar Registrar em desktop. |
+| Cabeçalho | Mobile: logo completa responsiva no link Início, sem nome digitado adjacente, botão menu rotulado “Abrir navegação” se necessário; desktop: Início, Problemas, Dados, Municípios e ação “Registrar problema”. Link “Pular para o conteúdo” aparece no foco. Estado ativo com texto e sublinhado/indicador. | Não usar menu que exige JS para descobrir as rotas; não ocultar Registrar em desktop. |
 | Barra inferior mobile | 4 itens: Início, Problemas, botão central “Registrar”, Dados. Mínimo 48 px, área segura `env(safe-area-inset-bottom)`, fundo sólido, divisória superior. No fluxo de formulário e acompanhamento privado, não aparece para preservar foco e altura. | Não sobrepor conteúdo: `padding-bottom` ≥ altura total + safe area; não cobrir teclado ou botão de envio. |
-| Rodapé | Logo completa aprovada, sem nome adjacente duplicado; Sobre, Transparência, Privacidade, Termos, Regras, Contato; limite do serviço em frase curta; link de acompanhamento. Mobile em lista vertical, desktop em 3 grupos. | Não colocar aviso metodológico só no rodapé nem usar texto legal como única explicação do serviço. |
+| Rodapé | Logo completa aprovada, sem nome adjacente duplicado, junto à descrição do serviço; Sobre, Transparência, Privacidade, Termos, Regras e Contato em área de links com duas colunas. Desktop em grid assimétrico entre identidade/descrição e links; mobile com os blocos empilhados. Nota legal abaixo de uma divisória. | Não colocar aviso metodológico só no rodapé nem usar texto legal como única explicação do serviço. |
 | Selo de situação | Sete variações descritas em seguida; ícone + rótulo completo, fundos suaves, contorno opcional. Sempre conserva o rótulo em texto. | Não abreviar, usar apenas ponto, associar verde a gravidade ou fundir situação com verificação. |
 | Cartão de relato | Editorial compacto: categoria e selo demonstrativo no topo; título como link principal; local; status e data; resposta oficial como linha independente. A área clicável do título é ampla. Versão “resumo” para home e “linha” para município. | Não colocar contador de afetados como escala, não fazer cartão inteiro competir com múltiplos botões. |
 | Linha do tempo | Lista ordenada `<ol>` cronológica no layout visual; cada item traz data, tipo, texto, situação nova e evidência quando houver. No detalhe, mais recente primeiro visualmente, mas ordem DOM cronológica reversa apenas se anunciada como “Mais recente”. Recomenda-se mais antigo primeiro para leitura linear. | Não inserir eventos privados nem omitir a data; não chamar mensagem do cidadão de resposta do órgão. |
@@ -612,7 +612,7 @@ Mapeamento para CSS variables e Tailwind: nomes semânticos estáveis; pode-se e
 
 Já existentes: shell/navegação, home SSR com métricas/relatos/passos, listas/detalhe, municípios, registro/upload/acompanhamento/exclusão, filtros GET município/categoria e tabela de `/dados`, institucionais e estados globais. Preservar o trabalho local e ajustar só o necessário à identidade. Estado de `/dados` com conexão real ainda depende de validação; falha de consulta não comprova tela final.
 
-Ajustes desta entrega: tokens da referência com AA, tipografia local condicionada à licença, identidade aprovada com símbolo e nome no cabeçalho, logo completa no rodapé e prévia geral, símbolo nos ícones e na ficha dinâmica de compartilhamento, sempre em fundo claro e sem filete tricolor, nova hierarquia territorial da home, mapa sincronizado e regressão visual/acessível das rotas. Fase 2 real: busca textual, período, indicadores oficiais; choropleth continua fora desta entrega e exige metodologia/privacidade próprias.
+Ajustes desta entrega: tokens da referência com AA, tipografia local condicionada à licença, identidade aprovada com logo completa responsiva no cabeçalho, logo completa no rodapé e prévia geral, símbolo nos ícones e na ficha dinâmica de compartilhamento, sempre em fundo claro e sem filete tricolor, nova hierarquia territorial da home, mapa sincronizado e regressão visual/acessível das rotas. Fase 2 real: busca textual, período, indicadores oficiais; choropleth continua fora desta entrega e exige metodologia/privacidade próprias.
 
 ### Ordem recomendada de construção
 

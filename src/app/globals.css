@@ -167,18 +167,25 @@ html:has(.shell-publico[data-barra-movel="sim"]) { scroll-padding-bottom: calc(6
 .bg-neutro-fundo.text-texto-suave { color: var(--color-texto); }
 .shell-cabecalho { background: var(--color-fundo); border-bottom: 1px solid var(--color-borda-suave); }
 /* Keep the approved artwork on the light shell surface. */
-.shell-wordmark { display: inline-flex; align-items: center; gap: 0.625rem; max-width: 100%; font-family: var(--font-titulo); font-size: 1.25rem; font-weight: 750; letter-spacing: -0.045em; line-height: 1.15; color: var(--color-texto); text-decoration: none; }
-.shell-wordmark .shell-nome > span { color: var(--color-acao); margin-inline-start: 0.25em; }
+.shell-wordmark { display: block; width: 18rem; max-width: 100%; flex-shrink: 0; }
+.shell-wordmark img { display: block; width: 100%; height: auto; }
 .shell-nav-destaque:hover, .shell-nav-destaque:active { background: var(--color-acao-pressionada); color: var(--color-superficie); }
 .shell-nav-item[aria-current]:not(.shell-nav-destaque) { background: var(--color-acao-suave); border-radius: var(--radius-controle); }
 .shell-rodape { border-top: 1px solid var(--color-borda-suave); background: var(--color-fundo); }
 .shell-rodape p { max-width: var(--width-reading); }
-@media (min-width: 48rem) { .shell-wordmark { font-size: 1.5rem; } }
 
 .bg-erro-fundo .text-erro,
 .bg-erro-fundo.text-erro { color: var(--color-texto); }
 
-.shell-simbolo { width: 2.5rem; height: auto; flex-shrink: 0; }
-.shell-nome { min-width: 0; }
 .shell-marca-rodape { display: block; width: 17.5rem; max-width: 100%; margin-bottom: 1rem; }
 .shell-marca-rodape img { display: block; width: 100%; height: auto; }
+.shell-rodape-conteudo { padding-block: 2.5rem 1.5rem; }
+.shell-rodape-grade { display: grid; gap: 2rem; align-items: start; }
+.shell-rodape-identidade { min-width: 0; max-width: 25rem; }
+.shell-rodape-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 1.5rem; align-content: start; }
+.shell-rodape-links a { display: flex; align-items: center; min-height: 2.75rem; }
+.shell-rodape .shell-rodape-nota { max-width: none; margin-top: 2rem; border-top: 1px solid var(--color-borda-suave); padding-top: 1.25rem; }
+@media (min-width: 48rem) {
+  .shell-rodape-grade { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr); gap: clamp(2rem, 6vw, 5rem); }
+  .shell-rodape-links { padding-top: 0.5rem; }
+}
