@@ -2,10 +2,11 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { tokenSchema } from "@/lib/registro/token";
 import { bytea, hashSha256, hmacSha256 } from "@/lib/registro/seguranca";
-import { configServidor, rpc } from "@/lib/registro/servidor";
+import { configServidor, fotosHabilitadas, rpc } from "@/lib/registro/servidor";
 import { limitarHttp, respostaPrivada } from "@/lib/registro/http";
 import { ErroRegistro, respostaErro } from "@/lib/registro/erros";
 import { exigirStaging } from "@/lib/registro/staging";
+import { caminhoImagem } from "@/lib/registro/caminho-imagem.mjs";
 import { MAX_IMAGEM, prepararImagem } from "@/lib/registro/imagem";
 
 const MAX_REQUEST = MAX_IMAGEM + 16 * 1024;
@@ -13,6 +14,7 @@ const campos = z.object({ token: tokenSchema, ordem: z.coerce.number().int().min
 
 export async function POST(request: Request) {
   try {
+    if (!fotosHabilitadas()) throw new ErroRegistro("indisponivel");
     const url = new URL(request.url);
     if (request.headers.get("origin") !== url.origin || request.headers.get("sec-fetch-site") === "cross-site") throw new ErroRegistro("origem_invalida");
     if (url.search) throw new ErroRegistro("entrada_invalida");
@@ -22,7 +24,6 @@ export async function POST(request: Request) {
     exigirStaging(request);
     const config = configServidor();
     if (config.modoPublicacao !== "moderar_tudo") throw new ErroRegistro("indisponivel");
-    await limitarHttp(request, config, "acompanhar");
     if (!request.body) throw new ErroRegistro("corpo_invalido");
     const reader = request.body.getReader(); let total = 0; const chunks: Uint8Array[] = [];
     try { while (true) { const r = await reader.read(); if (r.done) break; total += r.value.length; if (total > MAX_REQUEST) { await reader.cancel(); throw new ErroRegistro("corpo_grande"); } chunks.push(r.value); } } finally { reader.releaseLock(); }
@@ -36,16 +37,22 @@ export async function POST(request: Request) {
     const [oc] = await rpc("acompanhar_por_token", { p_token_hash: bytea(hash) }, z.array(z.object({ out_moderacao: z.string() })).max(1));
     if (!oc) throw new ErroRegistro("token_invalido");
     if (oc.out_moderacao === "removido") throw new ErroRegistro("conflito");
-    const bytes = await prepararImagem(Buffer.from(await foto.arrayBuffer()), foto.type);
-    const digest = createHash("sha256").update(bytes).update(entrada.data.contexto).digest("hex");
-    const caminho = `${hmacSha256(config.hmacSegredo, `foto:${hash}`)}/${entrada.data.ordem}/${digest}.jpg`;
+    if (!foto.size || foto.size > MAX_IMAGEM) throw new ErroRegistro("corpo_grande");
+    const original = Buffer.from(await foto.arrayBuffer());
+    const hashEntrada = createHash("sha256").update(original).digest("hex");
+    const retry = await rpc("consultar_slot_imagem", { p_token_hash: bytea(hash), p_ordem: entrada.data.ordem, p_hash_entrada: hashEntrada, p_contexto: entrada.data.contexto }, z.array(z.object({ out_id: z.uuid() })).max(1));
+    await limitarHttp(request, config, "foto");
+    if (retry.length) return respostaPrivada({ confirmacao: "Foto recebida para revisão.", ordem: entrada.data.ordem }, 201);
+    const bytes = await prepararImagem(original, foto.type);
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    const caminho = caminhoImagem(hmacSha256(config.hmacSegredo, `foto:${hash}`), entrada.data.ordem, digest);
     const headers = { apikey: config.chave, Authorization: `Bearer ${config.chave}` };
     const storage = `${config.base}/storage/v1/object/imagens-quarentena/${caminho}`;
     const upload = await fetch(storage, { method: "POST", headers: { ...headers, "Content-Type": "image/jpeg", "x-upsert": "false" }, body: new Uint8Array(bytes), cache: "no-store", signal: AbortSignal.timeout(15000) });
     // Storage retries may find the immutable object left by a lost response.
     if (!upload.ok && upload.status !== 409 && !(upload.status === 400 && (await upload.json().catch(() => ({}))).error === "Duplicate")) throw new ErroRegistro("indisponivel");
     try {
-      await rpc("registrar_imagem", { p_token_hash: bytea(hash), p_ordem: entrada.data.ordem, p_caminho: caminho, p_mime: "image/jpeg", p_tamanho: bytes.length, p_contexto: entrada.data.contexto }, z.uuid());
+      await rpc("registrar_imagem", { p_token_hash: bytea(hash), p_ordem: entrada.data.ordem, p_caminho: caminho, p_mime: "image/jpeg", p_tamanho: bytes.length, p_contexto: entrada.data.contexto, p_hash_entrada: hashEntrada }, z.uuid());
     } catch (erro) {
       // Never delete on an ambiguous commit (timeout/lost response). Reconcile by
       // exact private path before cleanup; failure to read means retain for cron.

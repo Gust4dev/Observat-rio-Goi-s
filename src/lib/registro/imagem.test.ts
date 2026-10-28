@@ -22,3 +22,10 @@ describe("pipeline privado de fotos", () => {
     await expect(prepararImagem(largo, "image/png")).rejects.toThrow();
   });
 });
+
+it("aceita PNG de 24 MP e recusa bomba acima do teto de pixels", async()=>{
+ const png=await sharp({create:{width:6000,height:4000,channels:3,background:"white"}}).png().toBuffer();
+ const resultado=await prepararImagem(png,"image/png"); expect((await sharp(resultado).metadata()).width).toBe(1600);
+ const bomba=await sharp({create:{width:6001,height:4000,channels:3,background:"white"}}).png().toBuffer();
+ await expect(prepararImagem(bomba,"image/png")).rejects.toThrow();
+});

@@ -9,7 +9,10 @@
 -- Aborta se existir qualquer ocorrência que não seja deste seed (protege contra produção/dado real).
 do $$
 begin
-  if exists (select 1 from public.ocorrencias o where o.protocolo not like 'TESTE-%') then
+  -- Tolera apenas o resíduo anonimizado de uma exclusão a pedido do titular (teste ponta a ponta):
+  -- a linha fica como 'removido' por desenho (auditoria somente-inserção) e não é dado real.
+  if exists (select 1 from public.ocorrencias o where o.protocolo not like 'TESTE-%'
+             and not (o.moderacao = 'removido' and o.motivo_remocao = 'Exclusão solicitada pelo titular')) then
     raise exception 'TRAVA DO SEED: existem ocorrências que não são de teste; abortando (nunca rodar em produção).';
   end if;
   if (select count(*) from public.municipios) <> 246 then

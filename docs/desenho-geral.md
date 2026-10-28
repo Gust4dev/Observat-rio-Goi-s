@@ -115,10 +115,11 @@ Sem rota de servidor para a maioria das ações: o painel usa a sessão do admin
 | Auditoria | `historico_moderacao` (gestor+) | — |
 | Equipe | `administradores` (superadmin) | inserir/alterar papéis |
 
-Única rota de servidor do admin: **`/api/admin/imagem`**. Verifica a sessão, chama `admin_moderar_imagem` com o
-JWT do usuário (autoriza e audita) e, só então, com `service_role`, copia a foto de `imagens-quarentena` para
-`imagens-publicas` (aprovar) ou apaga (remover). Se a cópia falhar, a rotina de reconciliação (seção 8) corrige.
+Única rota de servidor do admin: **`/api/admin/imagem`**. Verifica o JWT na Supabase Auth, exige o claim `aal2` com `sub` igual ao usuário confirmado, e consulta o papel ativo antes de usar `service_role`. A sessão chega por Bearer ou pelo cookie `og_admin_access_token` (compatível com Basic Auth do staging; o login do M5 deverá gravá-lo com HttpOnly/Secure/SameSite). Uma operação administrativa adquire lease de dois minutos no banco para serializar cópia/aprovação/remoção entre instâncias.
 
+Ao aprovar, baixa da quarentena e grava primeiro em `imagens-publicas/<id>.jpg`, sem upsert; duplicado só é aceito após comparar SHA-256. Depois chama `admin_moderar_imagem` com o JWT, descrição pública revisada, checklist completo e ID da operação. Checklist positivo impede aprovação. Ao remover, muda o estado via RPC primeiro e apaga ambas as cópias depois; retry completa exclusões. O histórico somente-inserção registra alt público e checklist.
+
+Se houver erro entre cópia e RPC, a rota consulta o estado com o JWT: preserva aprovação já confirmada (resposta perdida), mas tenta apagar a cópia ainda pendente antes de liberar o lease. Falha de compensação deixa o lease expirar e a reconciliação remove órfãos após a margem. Uma cópia em bucket público é acessível diretamente durante essa janela; essa ordem permanece restrita ao staging fictício até as travas de privacidade do M4.
 Autenticação do admin: e-mail + senha com **MFA obrigatório**; sem cadastro aberto (convite pelo superadmin).
 
 ## 5. Frontend
@@ -259,3 +260,5 @@ Aplicar `db/011_imagens_resilientes.sql` antes de habilitar M4 no staging: a sob
 Em erro definitivo de RPC, a API confere o caminho na tabela antes de limpar o objeto não referenciado. Em timeout/resposta perdida, preserva o objeto para retry da mesma seleção; nunca apaga um objeto que possa ter commit confirmado. Reconciliação: executar diariamente `node scripts/limpar-quarentena.mjs --apply` em servidor confiável com as variáveis server-side; sem `--apply` só conta candidatos. O script percorre exclusivamente caminhos M4 do bucket privado, conserva qualquer caminho referenciado e limpa órfãos com mais de 24h; falha de leitura interrompe a limpeza. Agendamento e credenciais são configuração operacional ainda necessária antes de uso duradouro em staging. Não executar a limpeza simultaneamente a uma janela de retry de upload: pausar novos uploads durante a manutenção evita corrida entre verificação no banco e delete no Storage, que são serviços distintos.
 
 Complemento M4: antes de criar as prévias, o navegador aceita originais JPEG/PNG/WebP de até 12 MiB, decodifica sequencialmente, limita dimensões a 12.000 px e 24 milhões de pixels e usa canvas JPEG qualidade 0,8 para lado maior de até 1.600 px (sem ampliar). O arquivo final deve ter até 2 MiB; este mesmo JPEG permanece em memória para retries estáveis. A navegação do formulário aguarda a preparação. As verificações de assinatura/decoder e a reencodificação server-side continuam obrigatórias, pois o cliente não é uma fronteira de confiança.
+
+

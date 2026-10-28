@@ -5,7 +5,7 @@ import { ErroRegistro, respostaErro } from "./erros";
 import { bytea, chaveLimite, hmacOrigem } from "./seguranca";
 import { configServidor, rpc } from "./servidor";
 
-type Operacao = "registrar" | "acompanhar" | "excluir";
+type Operacao = "registrar" | "acompanhar" | "excluir" | "foto";
 export type ConfigRegistro = ReturnType<typeof configServidor>;
 const MAX_CORPO_BYTES = 24 * 1024;
 const headersPrivados = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "X-Robots-Tag": "noindex, nofollow", "Referrer-Policy": "no-referrer" };

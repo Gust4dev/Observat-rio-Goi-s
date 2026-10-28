@@ -3,6 +3,7 @@
 import Script from "next/script";
 import { AvisoConexao } from "@/components/AvisoConexao";
 import { EtapaFotos, type FotoRegistro } from "./EtapaFotos";
+import { protegerFotosNaoEnviadas } from "./envio-fotos";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { gerarToken, hashToken, tokenSchema } from "@/lib/registro/token";
 import { LIMITE_DESCRICAO, LIMITE_TITULO } from "@/lib/registro/schemas";
@@ -13,7 +14,7 @@ import { ETAPAS, validarEtapa, lerRascunho, enviarRegistro } from "./etapas";
 type Opcao = { slug: string; nome: string };
 type Campos = { municipio: string; categoria: string; titulo: string; descricao: string };
 type Tentativa = Campos & { token: string; tokenHash: string; chaveIdempotencia: string };
-type Props = { municipios: Opcao[]; categorias: Opcao[]; siteKey: string | undefined; indisponivel: boolean; municipioInicial?: string };
+type Props = { municipios: Opcao[]; categorias: Opcao[]; siteKey: string | undefined; indisponivel: boolean; municipioInicial?: string; fotosHabilitadas?: boolean };
 const STORAGE_KEY = "og.registro.m3.v1";
 const DRAFT_KEY = "og.registro.rascunho.v1";
 const VAZIO: Campos = { municipio: "", categoria: "", titulo: "", descricao: "" };
@@ -52,7 +53,7 @@ function mensagens(codigo: string | undefined, status: number): string {
   return "Não conseguimos enviar agora. Seus campos e o link privado continuam salvos neste aparelho. Tente novamente.";
 }
 
-export function RegistrarForm({ municipios, categorias, siteKey, indisponivel, municipioInicial = "" }: Props) {
+export function RegistrarForm({ municipios, categorias, siteKey, indisponivel, municipioInicial = "", fotosHabilitadas = false }: Props) {
   const [campos, setCampos] = useState<Campos>({ ...VAZIO, municipio: municipios.some(m => m.slug === municipioInicial) ? municipioInicial : "" });
   const [etapa, setEtapa] = useState(0);
   const [fotos, setFotos] = useState<FotoRegistro[]>([]);
@@ -74,6 +75,11 @@ export function RegistrarForm({ municipios, categorias, siteKey, indisponivel, m
   const captchaEl = useRef<HTMLDivElement>(null);
   const widgetId = useRef<string | undefined>(undefined);
   const bloqueado = indisponivel || !siteKey || !municipios.length || !categorias.length;
+  const totalEtapas = fotosHabilitadas ? 5 : 4;
+  const numeroEtapa = etapa + 1 - (!fotosHabilitadas && etapa > 3 ? 1 : 0);
+  useEffect(() => {
+    if (fotosHabilitadas && fotos.some(f => f.estado !== "enviada")) return protegerFotosNaoEnviadas(window);
+  }, [fotos, fotosHabilitadas]);
 
   useEffect(() => {
     let ativo = true;
@@ -105,6 +111,7 @@ export function RegistrarForm({ municipios, categorias, siteKey, indisponivel, m
   }, [campos, carregado, estado]);
 
   function mudarEtapa(proxima: number) {
+    if (!fotosHabilitadas && proxima === 3) proxima = etapa === 4 ? 2 : 4;
     setErrosCampos({}); setErro(""); setEtapa(proxima);
     requestAnimationFrame(() => tituloEtapa.current?.focus());
   }
@@ -202,7 +209,7 @@ export function RegistrarForm({ municipios, categorias, siteKey, indisponivel, m
       </div>
       {mensagemLink && <p role="status" className="mt-3">{mensagemLink}</p>}
     </div>
-    <EtapaFotos fotos={fotos} mudar={setFotos} token={tentativa.token} confirmado />
+    {fotosHabilitadas && <EtapaFotos fotos={fotos} mudar={setFotos} token={tentativa.token} confirmado />}
     <a className="inline-flex min-h-12 items-center font-semibold underline" href={link}>Abrir acompanhamento</a>
   </section>;
 
@@ -210,9 +217,9 @@ export function RegistrarForm({ municipios, categorias, siteKey, indisponivel, m
     <AvisoConexao />
     <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" strategy="afterInteractive" onLoad={() => setCaptchaPronto(true)} onError={() => setErro("A verificação de segurança está indisponível. Tente novamente mais tarde.")} />
     <form onSubmit={enviar} noValidate className="space-y-5">
-      <h2 ref={tituloEtapa} tabIndex={-1} aria-live="polite" className="text-xl font-bold">Etapa {etapa + 1} de 5 · {ETAPAS[etapa]}</h2>
-      <progress max={5} value={etapa + 1} aria-label={`Progresso: etapa ${etapa + 1} de 5`} className="w-full" />
-      <p className="text-sm">{etapa} de 5 etapas concluídas</p>
+      <h2 ref={tituloEtapa} tabIndex={-1} aria-live="polite" className="text-xl font-bold">Etapa {numeroEtapa} de {totalEtapas} · {ETAPAS[etapa]}</h2>
+      <progress max={totalEtapas} value={numeroEtapa} aria-label={`Progresso: etapa ${numeroEtapa} de ${totalEtapas}`} className="w-full" />
+      <p className="text-sm">{numeroEtapa - 1} de {totalEtapas} etapas concluídas</p>
       {salvo && <p role="status">Rascunho salvo neste aparelho</p>}
       {armazenamentoErro && <p role="status">Não foi possível salvar o rascunho neste aparelho. Mantenha esta página aberta.</p>}
       {!tentativa && <button type="button" className="min-h-12 underline" onClick={() => setDescarte(true)}>Descartar rascunho</button>}
@@ -246,7 +253,7 @@ export function RegistrarForm({ municipios, categorias, siteKey, indisponivel, m
           <p id="ajuda-descricao" className="mt-1 text-sm text-texto-suave">{campos.descricao.length}/{LIMITE_DESCRICAO} caracteres</p>{errosCampos.descricao && <p id="erro-descricao" className="text-erro">{errosCampos.descricao}</p>}
         </div>
       </fieldset>
-      {etapa === 3 && <EtapaFotos fotos={fotos} mudar={setFotos} aoPreparar={setFotosPreparando} />}
+      {fotosHabilitadas && etapa === 3 && <EtapaFotos fotos={fotos} mudar={setFotos} aoPreparar={setFotosPreparando} />}
       {etapa === 4 && <section className="space-y-3"><h3 className="font-bold">Registro anônimo · confira seu relato</h3><p>Não coletamos nome, telefone ou contato. Seu relato será analisado antes de aparecer no site.</p><dl className="space-y-2 break-words"><dt className="font-semibold">Município</dt><dd>{municipios.find(m => m.slug === campos.municipio)?.nome}</dd><dt className="font-semibold">Categoria</dt><dd>{categorias.find(c => c.slug === campos.categoria)?.nome}</dd><dt className="font-semibold">Título</dt><dd>{campos.titulo}</dd><dt className="font-semibold">Descrição</dt><dd className="whitespace-pre-wrap">{campos.descricao}</dd></dl></section>}
       <p className="rounded-controle bg-neutro-fundo p-4">Não inclua nomes, telefones, documentos ou endereço residencial. Você não precisa informar nome ou contato. Seu relato será analisado antes de aparecer no site.</p>
       <p className="text-sm text-texto-suave">Os dados e a chave da tentativa ficam salvos neste aparelho até o envio ser confirmado. Em aparelho compartilhado, considere isso antes de continuar.</p>

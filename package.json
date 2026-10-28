@@ -11,7 +11,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "seed:staging": "node scripts/seed-staging.mjs",
-    "contrato:staging": "node scripts/contrato-staging.mjs"
+    "contrato:staging": "node scripts/contrato-staging.mjs",
+    "test:fotos:staging": "node scripts/testar-fotos-staging.mjs"
   },
   "dependencies": {
     "next": "16.4.3",

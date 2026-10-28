@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -36,5 +37,21 @@ describe("destino atual e navegação móvel", () => {
     const html = renderToStaticMarkup(createElement(Cabecalho, { pathname: "/problema/abc" }));
     expect(html).toMatch(/<a(?=[^>]*href="\/problemas")(?=[^>]*aria-current="page")[^>]*>/);
     expect(html.match(/aria-current="page"/g)).toHaveLength(1);
+  });
+});
+
+
+describe("identidade e espaço seguro do shell", () => {
+  it("usa wordmark tipográfico sem símbolo institucional", () => {
+    const html = renderToStaticMarkup(createElement(Cabecalho, { pathname: "/" }));
+    expect(html).toContain('class="shell-wordmark"');
+    expect(html).toContain("Observat\u00f3rio <span>Goi\u00e1s</span>");
+    expect(html).not.toMatch(/<svg|<img/);
+  });
+  it("reserva a altura integral da barra e a área segura para conteúdo e foco", () => {
+    const css = readFileSync(new URL("./globals.css", import.meta.url), "utf8");
+    expect(css).toContain('padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px))');
+    expect(css).toContain('scroll-margin-bottom: calc(6rem + env(safe-area-inset-bottom, 0px))');
+    expect(css).toContain('.shell-nav-destaque:hover, .shell-nav-destaque:active');
   });
 });

@@ -51,24 +51,21 @@ export function montarConsultaPorOcorrencia(
 // ---------------------------------------------------------------- imagens
 
 const BUCKET_IMAGENS = "imagens-publicas";
-const SEGMENTO_RE = /^[A-Za-z0-9._-]{1,200}$/;
-
-/** URL pública do bucket; null se o caminho ou o host forem suspeitos. Base injetável para teste. */
+/** O contrato público contém somente o ID; o caminho nunca vem do banco. */
 export function urlImagem(
-  caminho: string,
+  id: string,
   base: string | undefined = process.env.NEXT_PUBLIC_SUPABASE_URL,
 ): string | null {
-  if (!base) return null;
+  const imagem = idSchema.safeParse(id);
+  if (!base || !imagem.success) return null;
   let host: URL;
   try {
     host = new URL(base);
   } catch {
     return null;
   }
-  if (host.protocol !== "https:" || !host.hostname.endsWith(".supabase.co")) return null;
-  const segmentos = caminho.split("/");
-  if (segmentos.length > 6 || !segmentos.every((s) => SEGMENTO_RE.test(s) && s !== "." && s !== "..")) return null;
-  const url = new URL(`/storage/v1/object/public/${BUCKET_IMAGENS}/${segmentos.join("/")}`, host.origin);
+  if (host.protocol !== "https:" || !host.hostname.endsWith(".supabase.co") || host.username || host.password || host.port || host.pathname !== "/" || host.search || host.hash) return null;
+  const url = new URL(`/storage/v1/object/public/${BUCKET_IMAGENS}/${imagem.data}.jpg`, host.origin);
   return url.origin === host.origin ? url.toString() : null;
 }
 

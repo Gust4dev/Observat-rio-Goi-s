@@ -2,8 +2,17 @@ import "server-only";
 import type { ZodType } from "zod";
 import { ErroRegistro } from "./erros";
 
-const FUNCOES = ["registrar_ocorrencia", "registrar_imagem", "acompanhar_por_token", "solicitar_exclusao_por_token", "consumir_limite", "triagem_sinais"] as const;
+const FUNCOES = ["registrar_ocorrencia", "registrar_imagem", "consultar_slot_imagem", "acompanhar_por_token", "solicitar_exclusao_por_token", "consumir_limite", "triagem_sinais"] as const;
 export type FuncaoRegistro = (typeof FUNCOES)[number];
+
+export function fotosHabilitadas(): boolean {
+  return process.env.FOTOS_HABILITADAS === "true"
+    && (process.env.MODO_PUBLICACAO?.trim() || "moderar_tudo") === "moderar_tudo"
+    && process.env.AMBIENTE_REGISTRO === "staging_ficticio"
+    && process.env.VERCEL_ENV !== "production"
+    && (process.env.VERCEL !== "1" || (process.env.VERCEL_ENV === "preview"
+      && Boolean(process.env.ACESSO_STAGING_USUARIO?.trim()) && Boolean(process.env.ACESSO_STAGING_SENHA?.trim())));
+}
 
 function obrigatoria(...partes: string[]): string {
   // Composição em runtime também evita incorporar identificadores sensíveis completos no build.
@@ -38,8 +47,9 @@ export function configServidor() {
     turnstileSiteKey: obrigatoria("NEXT_PUBLIC_TURNSTILE_SITE_KEY"),
     hmacSegredo,
     modoPublicacao,
+    fotosHabilitadas: fotosHabilitadas(),
     limites: {
-      registrar: inteiro("LIMITE_REGISTRO_MAXIMO"), acompanhar: inteiro("LIMITE_ACOMPANHAR_MAXIMO"),
+      foto: process.env.LIMITE_FOTO_MAXIMO === undefined || process.env.LIMITE_FOTO_MAXIMO === "" ? 8 : inteiro("LIMITE_FOTO_MAXIMO"), registrar: inteiro("LIMITE_REGISTRO_MAXIMO"), acompanhar: inteiro("LIMITE_ACOMPANHAR_MAXIMO"),
       excluir: inteiro("LIMITE_EXCLUIR_MAXIMO"), janelaSegundos: inteiro("LIMITE_JANELA_SEGUNDOS"),
     },
     triagem: { janelaSegundos: inteiro("TRIAGEM_JANELA_SEGUNDOS"), limiteOrigem: inteiro("TRIAGEM_LIMITE_ORIGEM") },

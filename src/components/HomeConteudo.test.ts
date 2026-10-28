@@ -1,25 +1,36 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const dados = vi.hoisted(() => ({ indicadores: vi.fn(), recentes: vi.fn() }));
-beforeEach(() => { dados.indicadores.mockResolvedValue(null); dados.recentes.mockResolvedValue([]); });
-vi.mock("@/lib/dados/consultas", async (original) => ({ ...await original<typeof import("@/lib/dados/consultas")>(), listarMunicipios: async () => Array.from({length: 20}, (_, i) => ({id:i+1,nome:`Cidade ${i}`,slug:`cidade-${i}`})), indicadoresGerais: dados.indicadores, ultimosProblemas: dados.recentes }));
+const dados = vi.hoisted(() => ({ indicadores: vi.fn(), recentes: vi.fn(), municipio: vi.fn() }));
+beforeEach(() => { dados.indicadores.mockResolvedValue(null); dados.recentes.mockResolvedValue([]); dados.municipio.mockReset(); dados.municipio.mockResolvedValue({slug:"goiania",nome:"Goiânia",total:3,ativo_acompanhamento:true}); });
+vi.mock("@/lib/dados/consultas", async (original) => ({ ...await original<typeof import("@/lib/dados/consultas")>(), listarMunicipios: async () => (await import("@/lib/mapa/municipios.json")).default, obterMunicipio: dados.municipio, indicadoresGerais: dados.indicadores, ultimosProblemas: dados.recentes }));
 import { HomeConteudo } from "./HomeConteudo";
 describe("home sem JavaScript", () => {
- it("limita opções de busca e mantém município nos dois destinos", async () => {
-  const html = renderToStaticMarkup(await HomeConteudo({searchParams:Promise.resolve({nome_municipio:"Cidade",municipio:"cidade-2"})}));
-  expect((html.match(/<option /g) ?? []).length).toBe(13);
-  expect(html).toContain('action="/registrar"');
-  expect(html).toContain('name="municipio"');
-  expect(html).toContain('value="cidade-2" selected=""');
-  expect(html).toContain('formAction="/problemas"');
+ it("oferece os 246 municípios em um só seletor GET e mantém município nos dois destinos", async () => {
+  const html = renderToStaticMarkup(await HomeConteudo({searchParams:Promise.resolve({municipio:"goiania"})}));
+  expect(html.match(/<select /g)).toHaveLength(1);
+  expect(html.match(/<option /g)).toHaveLength(247);
+  expect(html).toContain('href="/registrar?municipio=goiania"');
+  expect(html).toContain('href="/problemas?municipio=goiania"');
+  expect(html).toContain('value="goiania" selected=""');
   expect(html).toContain('method="get"');
+  expect(html).toContain("3 relatos publicados na plataforma");
+  expect(html.indexOf("Registrar um problema")).toBeLessThan(html.indexOf('<img '));
  });
- it("não envia catálogo sem busca nem aceita seleção desconhecida", async () => {
+ it("ignora seleção desconhecida e mantém ações sem dados", async () => {
   const html = renderToStaticMarkup(await HomeConteudo({searchParams:Promise.resolve({municipio:"inexistente"})}));
-  expect(html).not.toContain('value="cidade-');
+  expect(dados.municipio).not.toHaveBeenCalled();
   expect(html).not.toContain('value="inexistente"');
+  expect(html).toContain('href="/registrar"');
+  expect(html).toContain('href="/problemas"');
   expect(html).toContain("Ainda não há indicadores disponíveis");
   expect(html).toContain("Ainda não há relatos publicados");
+ });
+ it("preserva ações quando o agregado municipal está indisponível", async () => {
+  dados.municipio.mockRejectedValueOnce(new Error("rede indisponível"));
+  const html = renderToStaticMarkup(await HomeConteudo({searchParams:Promise.resolve({municipio:"goiania"})}));
+  expect(html).toContain("Dados indisponíveis");
+  expect(html).not.toContain("0 relatos publicados");
+  expect(html).toContain('href="/registrar?municipio=goiania"');
  });
 });
 
@@ -28,7 +39,7 @@ it("rotula métricas e relatos fictícios e apresenta método antes das contagen
  dados.indicadores.mockResolvedValue({total_ocorrencias:7,municipios_com_registros:2,com_resposta_oficial:1,resolvidas_documentadas:0});
  dados.recentes.mockResolvedValue([{id:"00000000-0000-4000-8000-000000000001",titulo:"Relato de teste",municipio_slug:"cidade-2",municipio_nome:"Cidade 2",categoria_slug:"outros",categoria_nome:"Outros",situacao:"recebido",publicado_em:"2026-10-20T12:00:00Z",tem_resposta_oficial:false}]);
  const html = renderToStaticMarkup(await HomeConteudo({searchParams:Promise.resolve({})}));
- expect(html.match(/Dados de demonstração/g)).toHaveLength(2);
+ expect(html.match(/Dados de demonstração/g)).toHaveLength(3);
  expect(html.indexOf("Como ler")).toBeLessThan(html.indexOf("<dd"));
  expect(html).toContain("Relato de teste");
  expect(html.indexOf("Relato de teste")).toBeLessThan(html.indexOf("Como funciona"));

@@ -57,6 +57,16 @@ for (const [view, cols] of Object.entries(permitidas)) {
   else ok(`${view}: ${Object.keys(corpo[0]).length} colunas, todas permitidas`);
 }
 
+// Empty views still have a schema: these probes must reject the old quarantine path.
+{
+  const esperado = await chamar('v_imagens_publicas?select=id,ocorrencia_id,ordem,descricao_publica&limit=0');
+  if (esperado.status !== 200 || !Array.isArray(esperado.corpo)) falha('v_imagens_publicas: contrato M4 ausente (descricao_publica)');
+  else ok('v_imagens_publicas: colunas M4 consultáveis mesmo vazia');
+  const privado = await chamar('v_imagens_publicas?select=caminho_storage&limit=0');
+  if (privado.status !== 400 || !['42703', 'PGRST204'].includes(privado.corpo?.code)) falha('v_imagens_publicas: não comprovou remoção de caminho_storage');
+  else ok('v_imagens_publicas: caminho_storage inexistente');
+}
+
 // ---- 2) sonda negativa: tabelas e funções internas NÃO podem responder 2xx para a chave pública
 const negadas = [200, 201, 204, 206];
 for (const t of ['ocorrencias', 'contatos_privados', 'tokens_gestao', 'historico_moderacao', 'confirmacoes',

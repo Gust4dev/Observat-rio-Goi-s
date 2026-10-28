@@ -45,7 +45,7 @@ export default async function PaginaProblema(props: PageProps<"/problema/[id]">)
   const documentada = temDocumentacaoResolucao(documentacao);
   const url = urlPublica(p.id);
   const publicadas = respostas.filter(r => r.publicada_em);
-  const fotos = imagens.slice(0, 3).map(i => ({ id: i.id, url: urlImagem(i.caminho_storage) })).filter((f): f is { id: string; url: string } => f.url !== null);
+  const fotos = imagens.slice(0, 3).map(i => ({ id: i.id, descricao: i.descricao_publica, url: urlImagem(i.id) })).filter((f): f is { id: string; descricao: string; url: string } => f.url !== null);
   return <article className="mx-auto flex w-full min-w-0 max-w-[680px] flex-col gap-8 break-words">
     <header className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-center gap-3"><p className="text-sm font-semibold">{p.categoria_nome}</p><SeloDemonstracao /></div>
@@ -64,7 +64,7 @@ export default async function PaginaProblema(props: PageProps<"/problema/[id]">)
     <section aria-labelledby="titulo-descricao" className="flex flex-col gap-3"><h2 id="titulo-descricao">O que foi relatado</h2><p className="whitespace-pre-line">{p.descricao}</p></section>
     {documentada && resolucao && <section aria-labelledby="titulo-resolucao" className="flex flex-col gap-3 rounded-lg border border-tom-sucesso-texto bg-tom-sucesso-fundo p-4"><h2 id="titulo-resolucao">Como sabemos que foi resolvido</h2><p className="whitespace-pre-line">{resolucao.texto}</p><p><strong>Evidência: </strong>{linkSeguro(resolucao.evidencia!) ? <a className="break-all" href={resolucao.evidencia!} rel="noopener noreferrer nofollow">{resolucao.evidencia}</a> : <span className="whitespace-pre-line">{resolucao.evidencia}</span>}</p></section>}
     <section aria-labelledby="titulo-fotos" className="flex flex-col gap-3"><h2 id="titulo-fotos">Fotos</h2>
-      {fotos.length ? <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">{fotos.map((f, i) => <li key={f.id}><figure><div className="relative aspect-[4/3] overflow-hidden rounded-lg border border-borda bg-superficie"><Image src={f.url} alt={`Foto ${i + 1} publicada no relato: ${p.titulo}`} fill sizes="(min-width: 640px) 328px, 100vw" loading="lazy" className="object-contain" /></div><figcaption className="mt-2 text-sm text-texto-suave">Foto {i + 1}. Descrição visual não informada no registro público.</figcaption></figure></li>)}</ul> : <p className="text-texto-suave">Nenhuma foto publicada.</p>}
+      {fotos.length ? <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">{fotos.map((f, i) => <li key={f.id}><figure><div className="relative aspect-[4/3] overflow-hidden rounded-lg border border-borda bg-superficie"><Image src={f.url} alt={f.descricao} fill sizes="(min-width: 640px) 328px, 100vw" loading="lazy" className="object-contain" /></div><figcaption className="mt-2 text-sm text-texto-suave">Foto {i + 1}. {f.descricao}</figcaption></figure></li>)}</ul> : <p className="text-texto-suave">Nenhuma foto publicada.</p>}
     </section>
     <section aria-labelledby="titulo-linha" className="flex flex-col gap-3"><h2 id="titulo-linha">Atualizações</h2><LinhaDoTempo itens={atualizacoes.map(a => ({ id: a.id, tipo: a.tipo, situacaoNova: a.situacao_nova, texto: a.texto, evidencia: a.evidencia, criadoEm: a.criado_em }))} /></section>
     <section aria-labelledby="titulo-acoes" className="flex flex-col gap-3"><h2 id="titulo-acoes">Acompanhe este relato</h2>

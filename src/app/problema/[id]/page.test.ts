@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { obterProblema } from "@/lib/dados/consultas";
 const consulta = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/dados/consultas", () => ({ obterProblema: consulta, urlImagem: () => "https://teste.supabase.co/storage/v1/object/public/imagens-publicas/foto.jpg" }));
+vi.mock("@/lib/dados/consultas", async (importOriginal) => ({ ...await importOriginal<typeof import("@/lib/dados/consultas")>(), obterProblema: consulta }));
 import Pagina, { generateMetadata } from "./page";
 type Dados = NonNullable<Awaited<ReturnType<typeof obterProblema>>>;
 const id = "11111111-1111-4111-8111-111111111111";
@@ -10,6 +10,7 @@ const props = { params: Promise.resolve({ id }), searchParams: Promise.resolve({
 let dados: Dados;
 beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://observatorio.example");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://teste.supabase.co");
   dados = { problema: { id, protocolo: "GO-123", titulo: "Rua sem luz", descricao: "<script>alert(1)</script>", situacao: "resolvido", verificado: true, publicado_em: "2026-10-26T12:00:00Z", atualizado_em: "2026-10-27T12:00:00Z", municipio_id: 1, municipio_nome: "Goiânia", municipio_slug: "goiania", categoria_id: 1, categoria_nome: "Iluminação pública", categoria_slug: "iluminacao-publica", confirmacoes_total: 2, tem_resposta_oficial: false }, imagens: [], atualizacoes: [], respostas: [] };
   consulta.mockImplementation(async () => dados);
 });
@@ -63,12 +64,13 @@ it("imagem social usa a mesma ausência pública", async () => {
   consulta.mockResolvedValue(null);
   await expect(Imagem({ params: props.params })).rejects.toMatchObject({ digest: "NEXT_HTTP_ERROR_FALLBACK;404" });
 });
-it("fotos públicas têm alt contextual sem inventar descrição visual", async () => {
-  dados.imagens = [{ id, ocorrencia_id: id, ordem: 1, caminho_storage: "foto.jpg" }];
+it("fotos públicas usam somente o alt revisado e o UUID no caminho público", async () => {
+  dados.imagens = [{ id, ocorrencia_id: id, ordem: 1, descricao_publica: "Buraco no pavimento, sem pessoas ou placas visíveis" }];
   const html = renderToStaticMarkup(await Pagina(props));
-  expect(html).toContain('alt="Foto 1 publicada no relato: Rua sem luz"');
+  expect(html).toContain('alt="Buraco no pavimento, sem pessoas ou placas visíveis"');
+  expect(html).toContain(`${id}.jpg`);
   expect(html).toContain('loading="lazy"');
-  expect(html).toContain("Descrição visual não informada");
+  expect(html).not.toContain("Descrição visual não informada");
 });
 it("omite compartilhamento se não existe domínio público seguro", async () => {
   vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://usuario:segredo@observatorio.example");

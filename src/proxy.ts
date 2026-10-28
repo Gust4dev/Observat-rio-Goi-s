@@ -36,6 +36,8 @@ function credenciaisDe(request: NextRequest): [string, string] | null {
 }
 
 export function proxy(request: NextRequest) {
+  // Vercel Cron sends Bearer CRON_SECRET; this exact handler verifies it itself.
+  if (request.nextUrl.pathname === "/api/cron/limpar-quarentena") return NextResponse.next();
   const usuario = process.env.ACESSO_STAGING_USUARIO;
   const senha = process.env.ACESSO_STAGING_SENHA;
 

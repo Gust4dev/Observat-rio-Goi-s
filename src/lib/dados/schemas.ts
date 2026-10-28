@@ -61,13 +61,13 @@ export const problemaDetalheSchema = z.object({
 export type ProblemaDetalhe = z.infer<typeof problemaDetalheSchema>;
 
 // ---------------------------------------------------------------- demais views
-export const COLUNAS_IMAGEM = ["id", "ocorrencia_id", "ordem", "caminho_storage"] as const;
+export const COLUNAS_IMAGEM = ["id", "ocorrencia_id", "ordem", "descricao_publica"] as const;
 export const imagemSchema = z.object({
   id: uuid,
   ocorrencia_id: uuid,
   ordem: z.number().int(),
-  caminho_storage: z.string(),
-});
+  descricao_publica: z.string().trim().min(1).max(300),
+}).strict();
 export type Imagem = z.infer<typeof imagemSchema>;
 
 export const TIPOS_ATUALIZACAO = ["mudanca_situacao", "providencia", "evidencia", "resposta_oficial", "nota"] as const;

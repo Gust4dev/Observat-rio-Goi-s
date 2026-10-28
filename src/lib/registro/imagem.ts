@@ -2,6 +2,9 @@ import "server-only";
 import sharp from "sharp";
 import { ErroRegistro } from "./erros";
 
+sharp.concurrency(1);
+sharp.cache({ memory: 16, files: 0, items: 16 });
+
 export const MAX_IMAGEM = 2 * 1024 * 1024;
 export async function prepararImagem(bytes: Buffer, mime: string): Promise<Buffer> {
   if (!bytes.length || bytes.length > MAX_IMAGEM) throw new ErroRegistro("corpo_grande");

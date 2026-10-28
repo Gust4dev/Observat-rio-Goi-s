@@ -14,7 +14,7 @@ export function hmacOrigem(segredo: string, endereco: string, agente: string): s
   return hmacSha256(segredo, JSON.stringify(["origem-v1", endereco, agente]));
 }
 
-export function chaveLimite(segredo: string, endpoint: "registrar" | "acompanhar" | "excluir", origemHash: string): string {
+export function chaveLimite(segredo: string, endpoint: "registrar" | "acompanhar" | "excluir" | "foto", origemHash: string): string {
   return hmacSha256(segredo, JSON.stringify(["limite-v1", endpoint, origemHash]));
 }
 

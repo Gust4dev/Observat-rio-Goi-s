@@ -64,19 +64,19 @@ describe("cursor emitido é aceito pelo filtro", () => {
 describe("urlImagem", () => {
   const base = "https://hvekgzxuciyewtybwads.supabase.co";
   it("monta URL do bucket público", () => {
-    expect(urlImagem("abc/def.jpg", base)).toBe(
-      `${base}/storage/v1/object/public/imagens-publicas/abc/def.jpg`,
+    expect(urlImagem(ID, base)).toBe(
+      `${base}/storage/v1/object/public/imagens-publicas/3f2b8c1e-5a4d-4e6f-8b7a-1c2d3e4f5a6b.jpg`,
     );
   });
   it("recusa host não-Supabase, http e sem base", () => {
-    expect(urlImagem("a.jpg", "https://evil.com")).toBeNull();
-    expect(urlImagem("a.jpg", "http://x.supabase.co")).toBeNull();
-    expect(urlImagem("a.jpg", "https://x.supabase.co.evil.com")).toBeNull();
-    expect(urlImagem("a.jpg", undefined)).toBeNull();
-    expect(urlImagem("a.jpg", "lixo")).toBeNull();
+    expect(urlImagem(ID, "https://evil.com")).toBeNull();
+    expect(urlImagem(ID, "http://x.supabase.co")).toBeNull();
+    expect(urlImagem(ID, "https://x.supabase.co.evil.com")).toBeNull();
+    expect(urlImagem(ID, undefined)).toBeNull();
+    expect(urlImagem(ID, "lixo")).toBeNull();
   });
   it("recusa caminhos suspeitos", () => {
-    for (const c of ["../x.jpg", "a/../b", "//evil.com/x", "a b.jpg", "a?x=1", "a#x", "", "a\\b", "%2e%2e/x"]) {
+    for (const c of ["../x.jpg", "a/../b", "//evil.com/x", "a b.jpg", "a?x=1", "a#x", "", "a\\b", "%2e%2e/x", "abc/def.jpg", `${ID}.jpg`]) {
       expect(urlImagem(c, base)).toBeNull();
     }
   });
@@ -104,6 +104,14 @@ describe("DTOs x db/colunas-publicas.json", () => {
 });
 
 describe("schemas rejeitam resposta fora do contrato", () => {
+  it("foto pública exige descrição revisada e não aceita caminho da quarentena", () => {
+    const foto = { id: ID, ocorrencia_id: ID, ordem: 1, descricao_publica: "Buraco no pavimento da via" };
+    expect(schemas.imagemSchema.safeParse(foto).success).toBe(true);
+    expect(schemas.imagemSchema.safeParse({ ...foto, descricao_publica: "   " }).success).toBe(false);
+    expect(schemas.imagemSchema.safeParse({ ...foto, caminho_storage: "quarentena/foto.jpg" }).success).toBe(false);
+    expect(schemas.imagemSchema.safeParse({ id: ID, ocorrencia_id: ID, ordem: 1, caminho_storage: "quarentena/foto.jpg" }).success).toBe(false);
+    expect(schemas.COLUNAS_IMAGEM).toEqual(["id", "ocorrencia_id", "ordem", "descricao_publica"]);
+  });
   it("situação desconhecida e campo ausente", () => {
     const ok = {
       id: ID, titulo: "t", situacao: "registrado", verificado: false, publicado_em: T,

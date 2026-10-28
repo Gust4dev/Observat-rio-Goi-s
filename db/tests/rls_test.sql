@@ -186,7 +186,7 @@ begin
   perform public.admin_atualizar_situacao(v_a, 'resolvido', 'Médico contratado', 'https://exemplo.gov.br/portaria-123');
 
   -- aprovar imagem
-  perform public.admin_moderar_imagem(current_setting('test.img')::uuid, 'aprovar');
+  perform public.admin_moderar_imagem(current_setting('test.img')::uuid, 'aprovar', null, 'Foto fictícia de pavimento', '{"rosto":false,"menor":false,"placa":false,"numero_residencia":false,"documento":false,"agressao":false}'::jsonb, (select out_operacao from public.admin_preparar_imagem(current_setting('test.img')::uuid,'aprovar')));
 
   reset role;
   raise notice 'ok: moderador';
@@ -204,7 +204,7 @@ begin
   select count(*) into n from public.v_atualizacoes_publicas;
   if n <> 2 then raise exception 'FALHOU: linha do tempo pública com % itens', n; end if;
   select count(*) into n from public.v_imagens_publicas;
-  if n <> 1 then raise exception 'FALHOU: imagem aprovada não aparece'; end if;
+  if n <> 1 then raise exception 'FALHOU: imagem aprovada com alt público não apareceu'; end if;
   select resolvidas_documentadas into n from public.v_indicadores_gerais;
   if n <> 1 then raise exception 'FALHOU: indicador de resolvidas = %', n; end if;
   reset role;
@@ -308,3 +308,4 @@ begin
 end $$;
 
 do $$ begin raise notice 'TODOS OS TESTES PASSARAM'; end $$;
+

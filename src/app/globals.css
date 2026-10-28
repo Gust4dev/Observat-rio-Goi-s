@@ -3,23 +3,26 @@
 /* Semantic palette from design B; utility names are adapters below. */
 :root {
   color-scheme: light;
-  --sem-fundo: #F8F7F1;
-  --sem-superficie: #FFFFFF;
-  --sem-texto: #1B3028;
-  --sem-texto-suave: #45584F;
-  --sem-acao: #17623C;
-  --sem-acao-pressionada: #154A31;
-  --sem-destaque: #8A5A00;
-  --sem-destaque-suave: #F6EED5;
-  --sem-territorio: #234C66;
-  --sem-terra: #8A492F;
-  --sem-sucesso-fundo: #E8F0E8;
-  --sem-info-fundo: #EAF0F4;
-  --sem-erro: #8C2F28;
-  --sem-erro-fundo: #F9E9E7;
-  --sem-neutro-fundo: #EEF0EC;
-  --sem-borda: #7F8D83;
-  --sem-borda-suave: #D8DED7;
+  --sem-fundo: oklch(97.3% 0.008 100);
+  --sem-superficie: oklch(100% 0 0);
+  --sem-texto: oklch(29% 0.039 167);
+  --sem-texto-suave: oklch(54.5% 0.046 257);
+  --sem-acao: oklch(46.9% 0.105 157);
+  --sem-acao-pressionada: oklch(33.7% 0.047 173);
+  --sem-destaque: oklch(82.6% 0.142 93);
+  --sem-destaque-suave: oklch(94.3% 0.051 92);
+  --sem-territorio: oklch(33.7% 0.047 173);
+  --sem-terra: oklch(55.7% 0.103 46);
+  --sem-sucesso-fundo: oklch(95% 0.04 155);
+  --sem-info-fundo: oklch(95% 0.025 255);
+  --sem-erro: oklch(56% 0.2 27);
+  --sem-erro-fundo: oklch(94.6% 0.018 26);
+  --sem-neutro-fundo: oklch(94.6% 0.009 100);
+  --sem-borda: oklch(63% 0.024 150);
+  --sem-secundario: oklch(93.9% 0.017 151);
+  --sem-acao-suave: oklch(94.3% 0.027 155);
+  --sem-info: oklch(33.9% 0.073 247);
+  --sem-borda-suave: oklch(88.5% 0.017 141);
   /* No licensed font assets supplied: use local system metrics, no requests. */
   --font-titulo: system-ui, Arial, sans-serif;
   --font-corpo: system-ui, Arial, sans-serif;
@@ -43,6 +46,10 @@
 
 @theme static inline {
   --color-fundo: var(--sem-fundo);
+  --color-secundario: var(--sem-secundario);
+  --color-acao-suave: var(--sem-acao-suave);
+  --color-info: var(--sem-info);
+  --color-foco: var(--sem-acao);
   --color-superficie: var(--sem-superficie);
   --color-texto: var(--sem-texto);
   --color-texto-suave: var(--sem-texto-suave);
@@ -68,13 +75,13 @@
   --color-acao-escura: var(--color-acao-pressionada);
   --color-sobre-acao: var(--color-superficie);
   --color-tom-neutro-fundo: var(--color-neutro-fundo);
-  --color-tom-neutro-texto: var(--color-texto-suave);
+  --color-tom-neutro-texto: var(--color-texto);
   --color-tom-andamento-fundo: var(--color-info-fundo);
   --color-tom-andamento-texto: var(--color-texto);
   --color-tom-sucesso-fundo: var(--color-sucesso-fundo);
   --color-tom-sucesso-texto: var(--color-texto);
   --color-tom-encerrado-fundo: var(--color-neutro-fundo);
-  --color-tom-encerrado-texto: var(--color-texto-suave);
+  --color-tom-encerrado-texto: var(--color-texto);
   --color-aviso-fundo: var(--color-destaque-suave);
   --color-aviso-texto: var(--color-texto);
 }
@@ -101,7 +108,7 @@
   a { color: var(--color-acao); text-decoration: underline; text-underline-offset: 0.2em; }
   a:hover, a:active { color: var(--color-acao-pressionada); }
   :focus-visible {
-    outline: 3px solid var(--color-acao);
+    outline: 3px solid var(--color-foco);
     outline-offset: 3px;
     scroll-margin-block: var(--space-4);
   }
@@ -153,3 +160,20 @@ html:has(.shell-publico[data-barra-movel="sim"]) { scroll-padding-bottom: calc(6
 @media (max-width: 63.999rem) {
   .shell-nav-mobile .shell-nav-item { padding-inline: 2px; white-space: nowrap; overflow-wrap: normal; }
 }
+
+/* Gold is a surface/accent: legacy text utilities use the dark territorial ink. */
+.text-destaque { color: var(--color-territorio); }
+.bg-neutro-fundo .text-texto-suave,
+.bg-neutro-fundo.text-texto-suave { color: var(--color-texto); }
+.shell-cabecalho { background: var(--color-fundo); border-bottom: 1px solid var(--color-borda-suave); }
+/* No chromatic strip: the plain wordmark avoids an institutional flag signature. */
+.shell-wordmark { font-family: var(--font-titulo); font-size: 1.25rem; font-weight: 750; letter-spacing: -0.045em; line-height: 1.15; color: var(--color-texto); text-decoration: none; }
+.shell-wordmark span { color: var(--color-acao); margin-inline-start: 0.25em; }
+.shell-nav-destaque:hover, .shell-nav-destaque:active { background: var(--color-acao-pressionada); color: var(--color-superficie); }
+.shell-nav-item[aria-current]:not(.shell-nav-destaque) { background: var(--color-acao-suave); border-radius: var(--radius-controle); }
+.shell-rodape { border-top: 1px solid var(--color-borda-suave); background: var(--color-fundo); }
+.shell-rodape p { max-width: var(--width-reading); }
+@media (min-width: 48rem) { .shell-wordmark { font-size: 1.5rem; } }
+
+.bg-erro-fundo .text-erro,
+.bg-erro-fundo.text-erro { color: var(--color-texto); }

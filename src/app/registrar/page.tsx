@@ -21,13 +21,14 @@ async function FormularioRegistroRuntime({ siteKey, searchParams }: { siteKey: s
   let municipios: { slug: string; nome: string }[] = [];
   let categorias: { slug: string; nome: string }[] = [];
   let indisponivel = false;
+  let fotosHabilitadas = false;
   try {
-    configServidor();
+    fotosHabilitadas = configServidor().fotosHabilitadas;
     [municipios, categorias] = await Promise.all([listarMunicipios(), listarCategorias()]);
   } catch {
     indisponivel = true;
   }
-  return <RegistrarForm municipioInicial={municipioInicial} municipios={municipios} categorias={categorias} siteKey={siteKey} indisponivel={indisponivel} />;
+  return <RegistrarForm municipioInicial={municipioInicial} municipios={municipios} categorias={categorias} siteKey={siteKey} indisponivel={indisponivel} fotosHabilitadas={fotosHabilitadas} />;
 }
 
 export default function RegistrarPage({ searchParams }: { searchParams: Consulta }) {

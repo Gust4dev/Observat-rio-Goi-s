@@ -14,7 +14,7 @@ const ler = (f) => readFile(path.join(dir, f), 'utf8');
 const arquivos = [
   '00_stub_supabase.sql', '../001_tipos_e_tabelas.sql', '../002_funcoes.sql',
   '../003_views.sql', '../004_rls_e_grants.sql', '../006_seed_categorias.sql', '../007_lacunas_do_desenho.sql',
-  '../009_view_sem_busca.sql', '../010_acompanhamento_completo.sql', '../011_imagens_resilientes.sql', '../012_dados_painel.sql',
+  '../009_view_sem_busca.sql', '../010_acompanhamento_completo.sql', '../011_imagens_resilientes.sql', '../012_dados_painel.sql', '../014_imagens_publicas.sql', '../015_upload_imagens.sql', '../016_moderacao_imagens.sql',
 ];
 
 const db = new PGlite();
@@ -28,7 +28,7 @@ for (const f of arquivos) {
   }
 }
 
-for (const t of ['rls_test.sql', 'migracao_007_test.sql', 'migracao_010_test.sql', 'migracao_011_test.sql', 'migracao_012_test.sql']) {
+for (const t of ['rls_test.sql', 'migracao_007_test.sql', 'migracao_010_test.sql', 'migracao_011_test.sql', 'migracao_012_test.sql', 'migracao_014_test.sql', 'migracao_015_test.sql', 'migracao_016_test.sql']) {
   try {
     await db.exec(await ler(t));
     console.log('ok   ', t);
@@ -76,9 +76,23 @@ try {
     const apos = await contar(sdb, 'public.ocorrencias');
     if (apos !== 28) falha(`rollback da trava deixou ${apos} ocorrências`);
     console.log('ok   ', 'trava do seed');
+
+    // resíduo anonimizado de exclusão a pedido não conta como dado real: o seed continua rodando
+    await sdb.exec('begin');
+    await sdb.exec(`insert into public.ocorrencias (protocolo, municipio_id, categoria_id, titulo, descricao, moderacao, motivo_remocao)
+      select 'OG-26-0002', m.id, c.id, '[conteúdo removido a pedido do titular]', '[conteúdo removido a pedido do titular]', 'removido', 'Exclusão solicitada pelo titular'
+        from public.municipios m, public.categorias c limit 1`);
+    let tolerou = true;
+    try { await sdb.exec(await ler('../seed/staging_ficticio.sql')); } catch (e) { tolerou = false; }
+    const comResiduo = await contar(sdb, 'public.ocorrencias');
+    await sdb.exec('rollback');
+    if (!tolerou) falha('a trava abortou por causa do resíduo anonimizado de exclusão');
+    if (comResiduo !== 29) falha(`seed com resíduo deixou ${comResiduo} ocorrências (esperado 29)`);
+    console.log('ok   ', 'trava tolera resíduo de exclusão a pedido');
   } catch (e) {
     falha(e.message);
   }
 }
 
 console.log('\nTODOS OS TESTES PASSARAM');
+

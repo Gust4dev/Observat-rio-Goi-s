@@ -2,8 +2,14 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { RegistrarForm, SemJavaScript } from "./RegistrarForm";
-const props = { municipios:[{slug:"goiania",nome:"Goiânia"}], categorias:[{slug:"mobilidade",nome:"Mobilidade"}], siteKey:"test", indisponivel:false };
+const props = { municipios:[{slug:"goiania",nome:"Goiânia"}], categorias:[{slug:"mobilidade",nome:"Mobilidade"}], siteKey:"test", indisponivel:false, fotosHabilitadas:true };
 describe("formulário SSR acessível", () => {
+ it("omite o passo de fotos por padrão", () => {
+  const html = renderToStaticMarkup(createElement(RegistrarForm, {...props, fotosHabilitadas:undefined}));
+  expect(html).toContain("Etapa 1 de 4 · Local");
+  expect(html).toContain('aria-label="Progresso: etapa 1 de 4"');
+  expect(html).not.toContain("de 5");
+ });
  it("anuncia progresso e mantém controles nativos com município inicial validado", () => {
   const html = renderToStaticMarkup(createElement(RegistrarForm, {...props, municipioInicial:"goiania"}));
   expect(html).toContain("Etapa 1 de 5 · Local");

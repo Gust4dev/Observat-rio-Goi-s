@@ -17,9 +17,9 @@ export function ItemNavegacao({ nome, href, pathname, destaque = false }: {
 }
 
 export function Cabecalho({ pathname }: { pathname: string }) {
-  return <header className="border-b border-borda bg-superficie">
+  return <header className="shell-cabecalho">
     <div className="shell-largura flex flex-wrap items-center justify-between gap-x-6 py-3">
-      <Link href="/" className="text-xl font-bold text-texto no-underline">Observatório Goiás</Link>
+      <Link href="/" className="shell-wordmark">Observatório <span>Goiás</span></Link>
       <nav aria-label="Principal" className="shell-nav-desktop">
         {destinos.map((destino) => <ItemNavegacao key={destino.nome} {...destino} pathname={pathname} destaque={destino.nome === "Registrar problema"} />)}
       </nav>
