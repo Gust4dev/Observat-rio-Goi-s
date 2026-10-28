@@ -92,6 +92,6 @@ npx supabase db query --linked --project-ref <ref-staging> -f db/seed/staging_fi
 - Evitar o Realtime do Supabase nas tabelas base: ele depende das mesmas polÃ­ticas e Ã© fÃ¡cil expor demais.
 
 ### Dados do painel (012)
-Aplicar `012_dados_painel.sql` após 011: corrige resolução documentada (situação resolvido + atualização pública da resolução com texto e evidência não vazios). A view pública agregada `v_dados_painel` agrupa município, categoria, mês de publicação em America/Sao_Paulo e situação, com contagens sem duplicar atualizações. O cliente percorre todas as páginas por id determinístico, sem limite total. Leituras entre páginas não são um snapshot transacional.
+Aplicar `012_dados_painel.sql` apÃ³s 011: corrige resoluÃ§Ã£o documentada (situaÃ§Ã£o resolvido + atualizaÃ§Ã£o pÃºblica da resoluÃ§Ã£o com texto e evidÃªncia nÃ£o vazios). A view pÃºblica agregada `v_dados_painel` agrupa municÃ­pio, categoria, mÃªs de publicaÃ§Ã£o em America/Sao_Paulo e situaÃ§Ã£o, com contagens sem duplicar atualizaÃ§Ãµes. O cliente percorre todas as pÃ¡ginas por id determinÃ­stico, sem limite total. Leituras entre pÃ¡ginas nÃ£o sÃ£o um snapshot transacional.
 
-Configure `DADOS_DEMONSTRACAO=true` somente no ambiente com seed fictício confirmado; ausência da variável não presume demonstração. Não altera a fonte de dados.
+Configure `DADOS_DEMONSTRACAO=true` somente no ambiente com seed fictÃ­cio confirmado; ausÃªncia da variÃ¡vel nÃ£o presume demonstraÃ§Ã£o. NÃ£o altera a fonte de dados.

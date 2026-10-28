@@ -85,13 +85,13 @@ it("retry reconhecido evita novo processamento e upload", async()=>{
  expect(calls.some(c=>c.url.includes("/storage/"))).toBe(false);
  expect(calls.some(c=>c.url.endsWith("registrar_imagem"))).toBe(false);
 });
-it("usa limite próprio de fotos depois da validação do slot", async()=>{
+it("usa limite prÃ³prio de fotos depois da validaÃ§Ã£o do slot", async()=>{
  expect((await POST(await req())).status).toBe(201);
  const limite=calls.find(c=>c.url.endsWith("consumir_limite"))!;expect(JSON.parse(String(limite.init?.body)).p_maximo).toBe(8);
  expect(calls.findIndex(c=>c.url.endsWith("consultar_slot_imagem"))).toBeLessThan(calls.indexOf(limite));
 });
 
-it("contexto alterado e uploads simultâneos usam a mesma identidade de arquivo", async()=>{
+it("contexto alterado e uploads simultÃ¢neos usam a mesma identidade de arquivo", async()=>{
  const respostas=await Promise.all([POST(await req("1","Contexto primeiro")),POST(await req("1","Contexto segundo"))]);
  expect(respostas.map(r=>r.status)).toEqual([201,201]);
  const uploads=calls.filter(c=>c.url.includes("/storage/"));expect(uploads).toHaveLength(2);expect(new Set(uploads.map(c=>c.url)).size).toBe(1);

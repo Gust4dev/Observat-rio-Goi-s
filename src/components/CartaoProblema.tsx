@@ -26,14 +26,14 @@ export function CartaoProblema({ id, titulo, municipioNome, categoriaNome, categ
   if (variante === "home") {
     const href = `/problema/${encodeURIComponent(id)}`;
     return (
-      <article className="group flex h-full min-w-0 flex-col rounded-xl border border-borda-suave bg-superficie shadow-md shadow-territorio/15 transition-shadow duration-300 hover:shadow-lg hover:shadow-territorio/20">
+      <article className="group relative flex h-full min-w-0 cursor-pointer flex-col rounded-xl border border-borda-suave bg-superficie shadow-md shadow-territorio/30 transition-all duration-300 ease-out hover:border-borda hover:shadow-lg hover:shadow-territorio/35 md:shadow-lg md:shadow-territorio/25 md:hover:z-10 md:hover:scale-[1.02] md:hover:shadow-2xl md:hover:shadow-territorio/40 motion-reduce:transform-none">
         <div aria-hidden="true" className="h-1.5 shrink-0 rounded-t-xl bg-linear-to-r from-acao via-territorio to-destaque" />
         <div className="flex flex-1 flex-col p-5 sm:p-6">
         {(categoriaSlug || categoriaNome || demonstracao) && <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3">
           {categoriaSlug ? <IconeCategoria categoria={categoriaSlug} /> : categoriaNome && <span className="min-w-0 break-words text-sm text-texto-suave">{categoriaNome}</span>}
           {demonstracao && <SeloDemonstracao />}
         </div>}
-        <h3 className="mt-4 break-words text-lg font-bold leading-snug tracking-tight"><Link className="inline-flex min-h-12 items-center text-territorio no-underline hover:text-acao hover:underline" href={href}>{titulo}</Link></h3>
+        <h3 className="mt-4 break-words text-lg font-bold leading-snug tracking-tight"><Link className="inline-flex min-h-12 items-center text-territorio no-underline hover:text-acao hover:underline group-hover:text-acao after:absolute after:inset-0 after:rounded-xl after:content-['']" href={href}>{titulo}</Link></h3>
         <div className="mt-auto pt-6">
         {municipioNome && <p className="flex items-start gap-1.5 font-medium text-texto"><svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="mt-0.5 shrink-0 text-terra"><path d="M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></svg><span className="min-w-0 break-words">{municipioNome}</span></p>}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
@@ -44,7 +44,7 @@ export function CartaoProblema({ id, titulo, municipioNome, categoriaNome, categ
         </div>
         </div>
         <div className="flex justify-end rounded-b-xl border-t border-borda bg-neutro-fundo px-5 py-4 sm:px-6">
-          <Link className="inline-flex min-h-12 items-center justify-center gap-2 rounded-controle bg-acao px-4 py-3 font-semibold text-sobre-acao no-underline hover:bg-acao-pressionada hover:text-sobre-acao" href={href}>Ver relato<span className="sr-only">: {titulo}</span><svg aria-hidden="true" focusable="false" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M4 12h16m-6-6 6 6-6 6" /></svg></Link>
+          <Link className="relative z-10 inline-flex min-h-12 items-center justify-center gap-2 rounded-controle bg-acao px-4 py-3 font-semibold text-sobre-acao no-underline hover:bg-acao-pressionada group-hover:bg-acao-pressionada hover:text-sobre-acao" href={href}>Ver relato<span className="sr-only">: {titulo}</span><svg aria-hidden="true" focusable="false" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="transition-transform duration-200 group-hover:translate-x-1"><path d="M4 12h16m-6-6 6 6-6 6" /></svg></Link>
         </div>
       </article>
     );

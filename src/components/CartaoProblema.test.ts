@@ -20,6 +20,9 @@ describe("CartaoProblema", () => {
     expect(html).toContain("Ver relato");
     expect(html).toContain("min-h-12");
     expect(html).toContain("w-full");
+    expect(html).toContain("cursor-pointer");
+    expect(html).toContain("md:hover:scale-[1.02]");
+    expect(html).toContain("after:absolute after:inset-0");
     expect(html).toContain('href="/problema/abc%201"');
     expect(html).not.toContain("Também me afeta");
     expect(html).not.toMatch(/<a\s[^>]*>(?:(?!<\/a>)[\s\S])*<a\s/);
