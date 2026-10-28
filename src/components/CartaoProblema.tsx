@@ -26,7 +26,7 @@ export function CartaoProblema({ id, titulo, municipioNome, categoriaNome, categ
   if (variante === "home") {
     const href = `/problema/${encodeURIComponent(id)}`;
     return (
-      <article className="group flex h-full min-w-0 flex-col rounded-xl border border-borda-suave bg-superficie shadow-sm transition-shadow duration-300 hover:shadow-lg">
+      <article className="group flex h-full min-w-0 flex-col rounded-xl border border-borda-suave bg-superficie shadow-md shadow-territorio/15 transition-shadow duration-300 hover:shadow-lg hover:shadow-territorio/20">
         <div aria-hidden="true" className="h-1.5 shrink-0 rounded-t-xl bg-linear-to-r from-acao via-territorio to-destaque" />
         <div className="flex flex-1 flex-col p-5 sm:p-6">
         {(categoriaSlug || categoriaNome || demonstracao) && <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3">
@@ -43,7 +43,7 @@ export function CartaoProblema({ id, titulo, municipioNome, categoriaNome, categ
         {temRespostaOficial && <p className="mt-3 border-t border-borda-suave pt-3 text-sm font-semibold">Tem resposta oficial</p>}
         </div>
         </div>
-        <div className="flex justify-end rounded-b-xl border-t border-borda-suave bg-neutro-fundo/50 px-5 py-4 sm:px-6">
+        <div className="flex justify-end rounded-b-xl border-t border-borda bg-neutro-fundo px-5 py-4 sm:px-6">
           <Link className="inline-flex min-h-12 items-center justify-center gap-2 rounded-controle bg-acao px-4 py-3 font-semibold text-sobre-acao no-underline hover:bg-acao-pressionada hover:text-sobre-acao" href={href}>Ver relato<span className="sr-only">: {titulo}</span><svg aria-hidden="true" focusable="false" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M4 12h16m-6-6 6 6-6 6" /></svg></Link>
         </div>
       </article>
