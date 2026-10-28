@@ -13,6 +13,7 @@ Migrações em ordem. Descrição das tabelas e dos estados em [`../docs/modelo-
 | `007_lacunas_do_desenho.sql` | Idempotência, fotos, direito de resposta, limite de taxa, retenção (com `pg_cron`), sinais de triagem, fila de moderação |
 | `008_seed_municipios.sql` | Os 246 municípios de Goiás (IBGE); idempotente, vai também para produção |
 | `009_view_sem_busca.sql` | `v_ocorrencias_publicas` deixa de expor a coluna `busca`; a lista permitida de colunas públicas fica em `colunas-publicas.json` e é conferida por teste |
+| `010_acompanhamento_completo.sql` | Acrescenta cronologia pública e respostas publicadas ao DTO privado de `acompanhar_por_token`, com execução exclusiva para `service_role` |
 | `seed/staging_ficticio.sql` | Dados fictícios **só para staging** (trava aborta se houver dado real) |
 | `tests/` | Stub do Supabase, testes de segurança (`rls_test.sql`, `migracao_007_test.sql`) e executor |
 
@@ -20,6 +21,7 @@ Migrações em ordem. Descrição das tabelas e dos estados em [`../docs/modelo-
 | Função | Retorna | Observação |
 |---|---|---|
 | `registrar_ocorrencia(..., p_chave_idempotencia, p_origem_hash)` | `out_id`, `out_protocolo`, `out_repetida` | Repetição com a mesma chave **e mesmo token** devolve a existente; com outro token, erro `22023` |
+| `acompanhar_por_token(token_hash)` | Campos básicos da ocorrência, `out_atualizacoes`, `out_respostas` | Token inválido retorna zero linhas. Arrays cronológicos contêm somente atualizações `publica = true` e respostas `publicada`; nunca contato, nota interna ou autor administrativo |
 | `registrar_imagem(token_hash, ordem, caminho, mime, tamanho)` | id da imagem | Nasce `pendente`; ordem 1–3; token inválido → `P0002` |
 | `registrar_resposta(ocorrencia, vinculo, contato, texto)` | boolean | `false` se a ocorrência não está publicada; entra `pendente` |
 | `triagem_sinais(titulo, descricao, origem_hash, janela, limite)` | `out_texto_repetido`, `out_origem_sinalizada` | Os limiares vêm do servidor (não públicos) |
@@ -47,9 +49,14 @@ Cobrem: o que `anon` não consegue ler ou executar, escrita direta bloqueada, ma
 regras de moderação (motivo obrigatório, "resolvido" exige evidência), auditoria somente-inserção,
 anonimato sem contato, exclusão a pedido do titular.
 
+O contrato privado da 010 é coberto por `tests/migracao_010_test.sql`. Para provar que os testes detectam
+regressões de visibilidade e privilégios, rode `node db/tests/mutacao_010.mjs`: o script remove filtros e
+concede `EXECUTE` a `anon` somente em bancos PGlite descartáveis; cada mutação precisa causar a falha esperada.
+Nenhum arquivo ou banco remoto é alterado.
+
 **No Supabase real (sem deixar dados):** executar a suíte dentro de uma transação desfeita no fim.
 ```bash
-# monta: begin; rls_test.sql; migracao_007_test.sql; rollback;
+# monta: begin; rls_test.sql; migracao_007_test.sql; migracao_010_test.sql; rollback;
 npx supabase db query --linked --project-ref <ref> -f suite_staging.sql
 ```
 Sem erro = passou (qualquer falha vira exceção e a transação é desfeita). Nunca rodar fora de `BEGIN ... ROLLBACK`: os testes criam usuários e dados.
