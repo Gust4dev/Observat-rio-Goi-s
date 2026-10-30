@@ -4,16 +4,18 @@
 > A adequação à LGPD e a definição do controlador dos dados são **[PENDENTES]**.
 
 ## Minimização
-- No M3, todo registro é anônimo e não coleta nome, WhatsApp ou fotos. Coleta opcional de contato depende de decisão de finalidade e retenção própria.
+- O relato público não exige identificação. Contato opcional fica separado e fotos são mantidas em armazenamento privado até revisão.
 - Dados pessoais de contato ficam em tabela separada e nunca aparecem em respostas públicas.
-- Prazo de retenção definido e aplicado por rotina automática **[PENDENTE: prazo]**.
+- Para fotos retidas/removidas, o padrão técnico provisório é 365 dias. Ao vencer, a referência, o hash de entrada e o contexto são apagados do banco; o objeto órfão é removido pelo limpador Storage após 24 horas e nova consulta de referência. Esse prazo não é definição jurídica e deve ser aprovado antes de produção.
+- O prazo de contatos permanece por registro em `expira_em`; a definição institucional continua pendente.
 
 ## Consentimento
 - Consentimento para receber atualizações é separado do envio do relato e fica registrado (data/versão do texto).
 - Dados de contato não são usados para outra finalidade além do acompanhamento da ocorrência.
 
 ## Controle de acesso
-- Acesso administrativo por papéis, com autenticação forte (MFA recomendado).
+- Acesso administrativo por papéis e TOTP obrigatório; funções no banco também exigem sessão Supabase AAL2.
+- Cookies administrativos são `HttpOnly`, `Secure`, `SameSite=Strict`, limitados ao caminho administrativo e não são devolvidos em JSON. Operações de escrita validam `Origin` e o cabeçalho CSRF próprio.
 - Leitura de `contatos_privados` restrita e registrada.
 - Auditoria de alterações em tabela *append-only*.
 
@@ -32,6 +34,10 @@
 - M3 usa código privado gerado no navegador. O registro envia só SHA-256; acompanhamento/exclusão enviam o segredo apenas no corpo POST, com `no-store`, nunca em query, path, metadata ou log. O link usa fragmento `/acompanhar#<código>`.
 - Quem detém o link pode acompanhar e solicitar exclusão; não há recuperação por protocolo. A tela explica a guarda e pede confirmação antes da ação. O registro de auditoria permanece.
 - Canal alternativo de acesso/correção e política de retenção para produção continuam pendentes.
+
+## Provisionamento do primeiro superadministrador
+
+O operador fornece `ADMIN_BOOTSTRAP_EMAIL` e `ADMIN_BOOTSTRAP_PASSWORD` no ambiente do processo, junto das variáveis Supabase. Execute `node --env-file=.env.local scripts/criar-superadmin.mjs` em ambiente controlado. O script cria ou localiza a conta, associa o papel de superadministrador e verifica TOTP; a semente é mostrada somente durante a primeira inscrição sem fator verificado. Guarde-a em cofre de segredos e não a envie por chat, issue ou repositório. O cadastro público do Auth deve permanecer desativado; contas administrativas são provisionadas por convite.
 
 ## O que ainda precisa de definição
 Controlador e encarregado (DPO), prazo de retenção, política de resposta a incidentes, local de

@@ -529,3 +529,11 @@ O banco local PGlite testa as migrations 011 e 012. As migrations e o bucket pri
 Validação local de 2026-10-28: `npm test` (287 testes), `npm run db:test`, `npm run typecheck`, `npm run lint` e `npm run build` passaram. Varredura de `.next/server` e `.next/static` não encontrou valor literal da `service_role`. O contrato real de staging não foi executado por depender do staging preparado e credenciais aprovadas.
 
 A medição inicial inclui HTML e recursos JS/CSS referenciados pelo HTML de produção sem compressão, com estimativa gzip separada: home 644 KB brutos / 193 KB gzip; detalhe 644 KB / 197 KB gzip; lista 689 KB / 197 KB gzip; registro 756 KB / 231 KB gzip; dados 618 KB / 190 KB gzip. Esses valores excedem a meta de 100 KB; LCP/Lighthouse ainda não foram medidos. Revisar divisão/carga de chunks e otimizar antes de declarar a meta atendida.
+
+## 22. Backend M5/M6 — 2026-10-29
+
+O backend administrativo usa sessão Auth com TOTP/AAL2, autorização por papel, RPCs auditadas e handlers em `/api/admin/*`. A gestão de equipe, moderação, denúncias, respostas, auditoria, revisão de fotos e sessão administrativa estão descritas em `docs/api-contratos.md`. As escritas públicas de denúncia e resposta seguem triagem e revisão humana; a confirmação “também me afeta” permanece desativada até decisão institucional.
+
+As migrações 017 a 022 ampliam o banco com proteção AAL2, operações administrativas, supressão de células pequenas, retenção parametrizada de imagens, filtros da fila e deduplicação de participações. Os indicadores e exportações seguem a metodologia em `docs/metodologia-indicadores.md`, incluindo supressão no banco e limites de exportação.
+
+A implementação não ativa publicação real de imagens nem substitui os gates de operação e privacidade. A validação operacional completa do ciclo MFA/fotos no ambiente de teste permanece registrada no relatório de execução privado.
