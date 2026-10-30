@@ -23,7 +23,7 @@ beforeEach(() => {
   vi.stubEnv("AMBIENTE_REGISTRO", "staging_ficticio"); vi.stubEnv("VERCEL_ENV", "");
   vi.stubEnv("ACESSO_STAGING_USUARIO", ""); vi.stubEnv("ACESSO_STAGING_SENHA", "");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://db.example"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "publica-ficticia"); vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "segredo-ficticio"); vi.stubEnv("TURNSTILE_SECRET", "captcha-ficticio"); vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-ficticio"); vi.stubEnv("HMAC_SEGREDO", "h".repeat(32)); vi.stubEnv("MODO_PUBLICACAO", "");
-  for (const nome of ["LIMITE_REGISTRO_MAXIMO", "LIMITE_ACOMPANHAR_MAXIMO", "LIMITE_EXCLUIR_MAXIMO", "LIMITE_JANELA_SEGUNDOS", "TRIAGEM_JANELA_SEGUNDOS", "TRIAGEM_LIMITE_ORIGEM"]) vi.stubEnv(nome, "5");
+  for (const nome of ["LIMITE_FOTO_MAXIMO", "LIMITE_REGISTRO_MAXIMO", "LIMITE_ACOMPANHAR_MAXIMO", "LIMITE_EXCLUIR_MAXIMO", "LIMITE_JANELA_SEGUNDOS", "TRIAGEM_JANELA_SEGUNDOS", "TRIAGEM_LIMITE_ORIGEM"]) vi.stubEnv(nome, "5");
   vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input); const body = init?.body ? JSON.parse(String(init.body)) : {};
     chamadas.push({ url, body });

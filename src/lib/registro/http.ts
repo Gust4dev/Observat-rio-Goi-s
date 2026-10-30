@@ -4,6 +4,7 @@ import { z, type ZodType } from "zod";
 import { ErroRegistro, respostaErro } from "./erros";
 import { bytea, chaveLimite, hmacOrigem } from "./seguranca";
 import { configServidor, rpc } from "./servidor";
+import { mesmaOrigem } from "../seguranca/origem";
 
 type Operacao = "registrar" | "acompanhar" | "excluir" | "foto";
 export type ConfigRegistro = ReturnType<typeof configServidor>;
@@ -13,16 +14,16 @@ const headersPrivados = { "Cache-Control": "no-store", "X-Content-Type-Options":
 export function respostaPrivada(dados: unknown, status = 200) { return Response.json(dados, { status, headers: headersPrivados }); }
 
 /** Nenhum texto de entrada, header, endereço ou segredo é incluído no log. */
-export function falhaHttp(erro: unknown, operacao: Operacao) {
+export function falhaHttp(erro: unknown, operacao: Operacao, etapa?: string) {
   if (!(erro instanceof ErroRegistro) || erro.codigo === "indisponivel") {
-    console.error(JSON.stringify({ evento: "falha_operacao", operacao, codigo: erro instanceof ErroRegistro ? erro.codigo : "inesperado", requisicao: crypto.randomUUID() }));
+    console.error(JSON.stringify({ evento: "falha_operacao", operacao, ...(etapa ? { etapa } : {}), codigo: erro instanceof ErroRegistro ? erro.codigo : "inesperado", requisicao: crypto.randomUUID() }));
   }
   const r = respostaErro(erro); r.headers.set("Referrer-Policy", "no-referrer"); return r;
 }
 
 export async function entradaHttp<T>(request: Request, schema: ZodType<T>, token = false): Promise<T> {
   const url = new URL(request.url);
-  if (request.headers.get("origin") !== url.origin || request.headers.get("sec-fetch-site") === "cross-site") throw new ErroRegistro("origem_invalida");
+  if (!mesmaOrigem(request) || request.headers.get("sec-fetch-site") === "cross-site") throw new ErroRegistro("origem_invalida");
   if (url.search) throw new ErroRegistro(token ? "token_invalido" : "entrada_invalida");
   if (request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") throw new ErroRegistro("corpo_invalido");
   const tamanho = request.headers.get("content-length");

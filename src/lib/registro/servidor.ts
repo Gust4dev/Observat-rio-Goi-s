@@ -49,7 +49,7 @@ export function configServidor() {
     modoPublicacao,
     fotosHabilitadas: fotosHabilitadas(),
     limites: {
-      foto: process.env.LIMITE_FOTO_MAXIMO === undefined || process.env.LIMITE_FOTO_MAXIMO === "" ? 8 : inteiro("LIMITE_FOTO_MAXIMO"), registrar: inteiro("LIMITE_REGISTRO_MAXIMO"), acompanhar: inteiro("LIMITE_ACOMPANHAR_MAXIMO"),
+      foto: inteiro("LIMITE_FOTO_MAXIMO"), registrar: inteiro("LIMITE_REGISTRO_MAXIMO"), acompanhar: inteiro("LIMITE_ACOMPANHAR_MAXIMO"),
       excluir: inteiro("LIMITE_EXCLUIR_MAXIMO"), janelaSegundos: inteiro("LIMITE_JANELA_SEGUNDOS"),
     },
     triagem: { janelaSegundos: inteiro("TRIAGEM_JANELA_SEGUNDOS"), limiteOrigem: inteiro("TRIAGEM_LIMITE_ORIGEM") },

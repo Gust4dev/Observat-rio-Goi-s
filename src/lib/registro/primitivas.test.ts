@@ -103,7 +103,7 @@ function ambiente() {
   vi.stubEnv("TURNSTILE_SECRET", "captcha-ficticio");
   vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-ficticio");
   vi.stubEnv("HMAC_SEGREDO", "h".repeat(32));
-  for (const nome of ["LIMITE_REGISTRO_MAXIMO", "LIMITE_ACOMPANHAR_MAXIMO", "LIMITE_EXCLUIR_MAXIMO", "LIMITE_JANELA_SEGUNDOS", "TRIAGEM_JANELA_SEGUNDOS", "TRIAGEM_LIMITE_ORIGEM"]) vi.stubEnv(nome, "5");
+  for (const nome of ["LIMITE_REGISTRO_MAXIMO", "LIMITE_ACOMPANHAR_MAXIMO", "LIMITE_EXCLUIR_MAXIMO", "LIMITE_FOTO_MAXIMO", "LIMITE_JANELA_SEGUNDOS", "TRIAGEM_JANELA_SEGUNDOS", "TRIAGEM_LIMITE_ORIGEM"]) vi.stubEnv(nome, "5");
 }
 
 describe("cliente de servidor", () => {
