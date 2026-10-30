@@ -1,4 +1,6 @@
 import "server-only";
+import { carregarExportacao, type filtrosExportacaoSchema } from "./exportacao";
+import type { z } from "zod";
 import { cacheLife, cacheTag } from "next/cache";
 import { consultar, type OpcoesConsulta } from "./rest";
 import {
@@ -16,6 +18,14 @@ import {
 } from "./params";
 
 // ---------------------------------------------------------------- montagem pura (testável sem rede)
+
+export async function obterExportacaoDados(entrada: z.infer<typeof filtrosExportacaoSchema> = {}) {
+  "use cache";
+  cacheLife("minutes");
+  cacheTag("indicadores", "problemas");
+  const { dadoPainelSchema } = await import("./schemas");
+  return carregarExportacao(entrada, (opcoes) => consultar("v_dados_painel", opcoes, dadoPainelSchema));
+}
 
 /** Filtro de cursor. Revalida estritamente antes de interpolar. */
 export function filtroCursor(c: Cursor): string {
@@ -136,7 +146,7 @@ export async function obterMunicipio(slug: string): Promise<{ slug: string; nome
   cacheLife("minutes");
   const v = slugSchema.safeParse(slug);
   if (!v.success) return null;
-  cacheTag(`municipio:${v.data}`);
+  cacheTag("municipios", `municipio:${v.data}`);
 
   const [municipios, contagens] = await Promise.all([
     consultar(
