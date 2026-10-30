@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: Database tests (PGlite)
+        run: npm run db:test
+      - name: Production build with dummy public configuration
+        shell: bash
+        run: |
+          node scripts/ci/build-data.mjs &
+          fixture_pid=$!
+          trap 'kill "$fixture_pid" 2>/dev/null || true' EXIT
+          curl --fail --silent --retry 10 --retry-connrefused --retry-delay 1 \
+            http://127.0.0.1:54321/rest/v1/municipios > /dev/null
+          npm run build
+        env:
+          # These placeholders grant no access and require no repository secrets.
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: ci-dummy-site-key
+          NEXT_PUBLIC_SITE_URL: https://ci.example.invalid

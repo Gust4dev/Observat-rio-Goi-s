@@ -13,6 +13,13 @@ EN
 - <bullet N em inglês>
 ```
 
+## Validação local
+
+Para ativar o hook neste checkout, execute `git config core.hooksPath scripts/hooks`.
+Em sistemas Unix, torne o launcher executável com `chmod +x scripts/hooks/commit-msg`.
+O hook verifica a estrutura dos dois blocos; a tradução e a redação continuam sendo conferidas por quem escreve o commit.
+Para validar um arquivo manualmente, execute `node scripts/validar-commit.mjs <arquivo>`.
+
 ## Tipo (prefixo)
 Conventional commits, minúsculo, sem escopo entre parênteses:
 - `feat:` nova funcionalidade ou capacidade
