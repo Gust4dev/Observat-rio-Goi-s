@@ -1,13 +1,17 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { randomBytes, randomInt } from "node:crypto";
 import sharp from "sharp";
 import { POST } from "../../app/api/imagem/route";
 let calls: { url: string; init?: RequestInit }[];
 let falha = false; let perdida = false; let existente = false; let retry = false; let tokenValido = true; let slotLivre = true;
+let limiteFotoConfigurado: number;
 const token = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 beforeEach(() => {
   calls=[]; falha=false; perdida=false; existente=false; retry=false; tokenValido=true; slotLivre=true;
   vi.stubEnv("FOTOS_HABILITADAS", "true");
-  for (const [k,v] of Object.entries({ NODE_ENV:"test", VERCEL:"", VERCEL_ENV:"", AMBIENTE_REGISTRO:"staging_ficticio", NEXT_PUBLIC_SUPABASE_URL:"https://db.example", SUPABASE_SERVICE_ROLE_KEY:"segredo", HMAC_SEGREDO:"a".repeat(32), TURNSTILE_SECRET:"teste", NEXT_PUBLIC_TURNSTILE_SITE_KEY:"teste", MODO_PUBLICACAO:"moderar_tudo", LIMITE_FOTO_MAXIMO:"8", LIMITE_REGISTRO_MAXIMO:"5", LIMITE_ACOMPANHAR_MAXIMO:"20", LIMITE_EXCLUIR_MAXIMO:"5", LIMITE_JANELA_SEGUNDOS:"60", TRIAGEM_JANELA_SEGUNDOS:"60", TRIAGEM_LIMITE_ORIGEM:"5" })) vi.stubEnv(k,v);
+  limiteFotoConfigurado = randomInt(1, 1_000_000);
+  const valores = { NODE_ENV:"test", VERCEL:"", VERCEL_ENV:"", AMBIENTE_REGISTRO:"staging_ficticio", NEXT_PUBLIC_SUPABASE_URL:"https://db.example", SUPABASE_SERVICE_ROLE_KEY:randomBytes(32).toString("base64url"), HMAC_SEGREDO:randomBytes(32).toString("base64url"), TURNSTILE_SECRET:randomBytes(32).toString("base64url"), NEXT_PUBLIC_TURNSTILE_SITE_KEY:"teste", MODO_PUBLICACAO:"moderar_tudo", LIMITE_FOTO_MAXIMO:String(limiteFotoConfigurado), LIMITE_REGISTRO_MAXIMO:String(randomInt(1, 1_000_000)), LIMITE_ACOMPANHAR_MAXIMO:String(randomInt(1, 1_000_000)), LIMITE_EXCLUIR_MAXIMO:String(randomInt(1, 1_000_000)), LIMITE_JANELA_SEGUNDOS:String(randomInt(1, 1_000_000)), TRIAGEM_JANELA_SEGUNDOS:String(randomInt(1, 1_000_000)), TRIAGEM_LIMITE_ORIGEM:String(randomInt(1, 1_000_000)) };
+  for (const [k,v] of Object.entries(valores)) vi.stubEnv(k,v);
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
     calls.push({url,init});
     if(url.endsWith("consumir_limite")) return Response.json(true);
@@ -20,10 +24,10 @@ beforeEach(() => {
   });
 });
 afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals();});
-async function req(ordem="1",contexto="Buraco na calçada",extra=false) {
+async function req(ordem="1",contexto="Buraco na calçada",extra=false,extraHeaders:Record<string,string>={}) {
   const bytes=await sharp({create:{width:4,height:4,channels:3,background:"red"}}).jpeg().toBuffer();
   const f=new FormData(); f.set("token",token);f.set("ordem",ordem);f.set("contexto",contexto);f.set("foto",new File([new Uint8Array(bytes)],"privado.jpg",{type:"image/jpeg"})); if(extra) f.append("foto",new File([],"extra.jpg"));
-  return new Request("https://localhost/api/imagem",{method:"POST",headers:{origin:"https://localhost"},body:f});
+  return new Request("https://localhost/api/imagem",{method:"POST",headers:{origin:"https://localhost",...extraHeaders},body:f});
 }
 it.each([undefined, "", "false", "TRUE", "1", " true "])("falha fechado com flag %s antes de consumir o corpo", async valor => {
   if (valor === undefined) delete process.env.FOTOS_HABILITADAS; else vi.stubEnv("FOTOS_HABILITADAS", valor);
@@ -76,6 +80,11 @@ it("bloqueia origem, body real grande e produção",async()=>{
   vi.stubEnv("VERCEL_ENV","production");expect((await POST(await req())).status).toBe(503);
 });
 
+it("aceita origem validada pelo host confiável do proxy",async()=>{
+ const resposta=await POST(await req("1","Buraco na calçada",false,{host:"127.0.0.1:3000",origin:"https://127.0.0.1:3000"}));
+ expect(resposta.status).toBe(201);
+});
+
 it("valida token antes de consumir limite e checa slot antes de processar", async()=>{
  tokenValido=false; expect((await POST(await req())).status).toBe(404); expect(calls.some(c=>c.url.endsWith("consumir_limite"))).toBe(false);
  calls=[];tokenValido=true;slotLivre=false; expect((await POST(await req())).status).toBe(409);expect(calls.some(c=>c.url.includes("/storage/"))).toBe(false);
@@ -87,7 +96,7 @@ it("retry reconhecido evita novo processamento e upload", async()=>{
 });
 it("usa limite próprio de fotos depois da validação do slot", async()=>{
  expect((await POST(await req())).status).toBe(201);
- const limite=calls.find(c=>c.url.endsWith("consumir_limite"))!;expect(JSON.parse(String(limite.init?.body)).p_maximo).toBe(8);
+ const limite=calls.find(c=>c.url.endsWith("consumir_limite"))!;expect(JSON.parse(String(limite.init?.body)).p_maximo).toBe(limiteFotoConfigurado);
  expect(calls.findIndex(c=>c.url.endsWith("consultar_slot_imagem"))).toBeLessThan(calls.indexOf(limite));
 });
 

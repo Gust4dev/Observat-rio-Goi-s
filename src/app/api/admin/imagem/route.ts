@@ -6,6 +6,7 @@ import { entradaHttp, respostaPrivada } from "@/lib/registro/http";
 import { ErroRegistro, respostaErro } from "@/lib/registro/erros";
 import { exigirStaging } from "@/lib/registro/staging";
 import { caminhoImagemValido } from "@/lib/registro/caminho-imagem.mjs";
+import { mesmaOrigem } from "@/lib/seguranca/origem";
 
 const checklist=z.object({rosto:z.boolean(),menor:z.boolean(),placa:z.boolean(),numero_residencia:z.boolean(),documento:z.boolean(),agressao:z.boolean()}).strict();
 const entrada=z.object({imagem_id:z.uuid(),acao:z.enum(["aprovar","remover"]),descricao_publica:z.string().trim().min(1).max(300).optional(),motivo:z.string().trim().min(1).max(1000).optional(),checklist}).strict().refine(v=>v.acao==="aprovar"?Boolean(v.descricao_publica)&&Object.values(v.checklist).every(x=>!x):Boolean(v.motivo));
@@ -36,6 +37,7 @@ async function chamar(base:string,path:string,headers:Record<string,string>,init
 }
 export async function POST(request:Request){
  try{
+  if(!request.headers.get("authorization")?.trim().toLowerCase().startsWith("bearer ")&&(!mesmaOrigem(request)||request.headers.get("X-Observatorio-CSRF")!=="1"))throw new FalhaAdmin(403);
   if(!fotosHabilitadas())throw new ErroRegistro("indisponivel");exigirStaging(request);
   const jwt=credencial(request);const config=configuracao();const usuarioHeaders={apikey:config.anon,Authorization:`Bearer ${jwt}`,"Content-Type":"application/json"};
   const auth=await chamar(config.base,"/auth/v1/user",usuarioHeaders);

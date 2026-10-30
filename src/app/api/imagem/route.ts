@@ -6,6 +6,7 @@ import { configServidor, fotosHabilitadas, rpc } from "@/lib/registro/servidor";
 import { limitarHttp, respostaPrivada } from "@/lib/registro/http";
 import { ErroRegistro, respostaErro } from "@/lib/registro/erros";
 import { exigirStaging } from "@/lib/registro/staging";
+import { mesmaOrigem } from "@/lib/seguranca/origem";
 import { caminhoImagem } from "@/lib/registro/caminho-imagem.mjs";
 import { MAX_IMAGEM, prepararImagem } from "@/lib/registro/imagem";
 
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
   try {
     if (!fotosHabilitadas()) throw new ErroRegistro("indisponivel");
     const url = new URL(request.url);
-    if (request.headers.get("origin") !== url.origin || request.headers.get("sec-fetch-site") === "cross-site") throw new ErroRegistro("origem_invalida");
+    if (!mesmaOrigem(request) || request.headers.get("sec-fetch-site") === "cross-site") throw new ErroRegistro("origem_invalida");
     if (url.search) throw new ErroRegistro("entrada_invalida");
     if (!request.headers.get("content-type")?.startsWith("multipart/form-data;")) throw new ErroRegistro("corpo_invalido");
     const tamanho = request.headers.get("content-length");
