@@ -10,15 +10,22 @@ const resultadoSchema = z.array(z.object({ out_id: z.uuid(), out_protocolo: z.st
 const sinaisSchema = z.array(z.object({ out_texto_repetido: z.boolean(), out_origem_sinalizada: z.boolean() })).length(1);
 
 export async function POST(request: Request) {
+  let etapa = "entrada";
   try {
     const entrada = await entradaHttp(request, registroSchema);
+    etapa = "ambiente";
     exigirStaging(request);
     const config = configServidor();
     if (config.modoPublicacao !== "moderar_tudo") throw new ErroRegistro("indisponivel");
+    etapa = "limite";
     const origem = await limitarHttp(request, config, "registrar");
+    etapa = "captcha";
     await verificarTurnstile(entrada.turnstile, config);
+    etapa = "referencias";
     const [municipio, categoria] = await Promise.all([resolverReferencia("municipios", entrada.municipio, config), resolverReferencia("categorias", entrada.categoria, config)]);
+    etapa = "triagem";
     await rpc("triagem_sinais", { p_titulo: entrada.titulo, p_descricao: entrada.descricao, p_origem_hash: bytea(origem), p_janela: `${config.triagem.janelaSegundos} seconds`, p_limite_origem: config.triagem.limiteOrigem }, sinaisSchema);
+    etapa = "registro";
     const [resultado] = await rpc("registrar_ocorrencia", {
       p_municipio_id: municipio, p_categoria_id: categoria, p_titulo: entrada.titulo, p_descricao: entrada.descricao,
       p_anonimo: true, p_nome: null, p_whatsapp: null, p_consentimento: false, p_consentimento_versao: null,
@@ -26,5 +33,5 @@ export async function POST(request: Request) {
       p_chave_idempotencia: entrada.chave_idempotencia, p_origem_hash: bytea(origem),
     }, resultadoSchema);
     return respostaPrivada({ protocolo: resultado.out_protocolo, confirmacao: "Relato recebido." }, 201);
-  } catch (erro) { return falhaHttp(erro, "registrar"); }
+  } catch (erro) { return falhaHttp(erro, "registrar", etapa); }
 }
