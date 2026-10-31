@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { criarAdminFicticio, codigoTotp } from './lib/admin-ficticio.mjs';
 import { executarCicloFotos } from './lib/fotos-staging.mjs';
+import { resolveSupabaseKeys, supabaseApiHeaders } from '../src/lib/supabase-keys.mjs';
 
 const REF = 'hvekgzxuciyewtybwads';
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -101,9 +102,10 @@ function ok(result, status, label) {
 }
 async function rest(pathname, { method = 'GET', body, key, prefer } = {}) {
   const c = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const apiKey = key ?? resolveSupabaseKeys(process.env).publicKey;
   const init = {
     method, cache: 'no-store', signal: AbortSignal.timeout(20_000),
-    headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(prefer ? { Prefer: prefer } : {}) },
+    headers: { ...supabaseApiHeaders(apiKey), Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(prefer ? { Prefer: prefer } : {}) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   };
   let response;
@@ -212,7 +214,7 @@ async function criarOcorrencia(marcador, municipio, categoria) {
     token_hash: tokenHash, chave_idempotencia: randomUUID(), turnstile: turnstileTestToken,
   }, cookie: false });
   const dados = ok(resposta, 201, 'registro fictício');
-  const rows = await rest(`ocorrencias?select=id,protocolo&protocolo=eq.${encodeURIComponent(dados.protocolo)}`, { key: process.env.SUPABASE_SERVICE_ROLE_KEY });
+  const rows = await rest(`ocorrencias?select=id,protocolo&protocolo=eq.${encodeURIComponent(dados.protocolo)}`, { key: resolveSupabaseKeys(process.env).secretKey });
   exigir(Array.isArray(rows) && rows.length === 1, 'Não foi possível localizar o relato fictício recém-criado.');
   const registro = { id: rows[0].id, token, protocolo: dados.protocolo, marcador };
   ocorrencias.push(registro);
@@ -232,10 +234,11 @@ async function atualizar(id, situacao, evidencia) {
 }
 
 async function executarFotos(env, appUrl) {
+  const keys = resolveSupabaseKeys(env);
   await executarCicloFotos({
     base: env.NEXT_PUBLIC_SUPABASE_URL,
-    anon: env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    service: env.SUPABASE_SERVICE_ROLE_KEY,
+    anon: keys.publicKey,
+    service: keys.secretKey,
     app: appUrl,
     adminToken: admin.accessToken,
     hmac,
@@ -260,10 +263,11 @@ async function excluirFixtures() {
 async function limparMembroConvidado() {
   if (!membroId) return;
   const q = new URLSearchParams({ user_id: `eq.${membroId}` });
-  await rest(`administradores?${q}`, { method: 'DELETE', key: process.env.SUPABASE_SERVICE_ROLE_KEY });
+  const { secretKey } = resolveSupabaseKeys(process.env);
+  await rest(`administradores?${q}`, { method: 'DELETE', key: secretKey });
   await fetch(new URL(`/auth/v1/admin/users/${membroId}`, process.env.NEXT_PUBLIC_SUPABASE_URL), {
     method: 'DELETE', cache: 'no-store', signal: AbortSignal.timeout(12000),
-    headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` },
+    headers: supabaseApiHeaders(secretKey),
   }).then((r) => { if (!r.ok && r.status !== 404) throw new Error(`Auth cleanup HTTP ${r.status}`); });
 }
 
@@ -273,7 +277,8 @@ async function main() {
   const supabase = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '');
   exigir(supabase.protocol === 'https:' && supabase.hostname === `${REF}.supabase.co` && supabase.pathname === '/' && !supabase.search && !supabase.hash,
     'E2E bloqueado: alvo não corresponde ao projeto staging fictício confirmado.');
-  exigir(Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY), 'E2E bloqueado: credenciais Supabase necessárias não foram fornecidas no ambiente.');
+  const keys = resolveSupabaseKeys(process.env);
+  exigir(Boolean(keys.publicKey && keys.secretKey), 'E2E bloqueado: credenciais Supabase necessárias não foram fornecidas no ambiente.');
   exigir(process.env.VERCEL_ENV !== 'production', 'E2E bloqueado em ambiente de produção.');
   const turnstileTestSecret = process.env.TURNSTILE_TEST_SECRET;
   const turnstileTestSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_TEST_SITE_KEY;
@@ -311,8 +316,8 @@ async function main() {
     await autenticarMfa();
 
     faseAtual = 'referências públicas de teste';
-    const municipios = await rest('municipios?select=id,slug&order=id.asc&limit=1', { key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY });
-    const categorias = await rest('categorias?select=id,slug&order=id.asc&limit=1', { key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY });
+    const municipios = await rest('municipios?select=id,slug&order=id.asc&limit=1', { key: keys.publicKey });
+    const categorias = await rest('categorias?select=id,slug&order=id.asc&limit=1', { key: keys.publicKey });
     exigir(municipios?.[0]?.slug && categorias?.[0]?.slug, 'Staging sem município/categoria pública para fixture.');
     const municipio = municipios[0]; const categoria = categorias[0];
 
@@ -352,7 +357,7 @@ async function main() {
     const duplicata = await criarOcorrencia('[E2E-DUPLICATA-ORIGEM]', municipio, categoria);
     await moderar(destino.id, 'aprovar'); await moderar(duplicata.id, 'aprovar');
     ok(await appAdmin(`/api/admin/ocorrencias/${duplicata.id}/mesclar`, { method: 'POST', body: { destino: destino.id, motivo: 'Duplicidade criada pelo teste fictício E2E.' } }), 200, 'mesclagem de duplicidade');
-    const fontePublica = await rest(`v_ocorrencias_publicas?select=id&id=eq.${duplicata.id}`, { key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY });
+    const fontePublica = await rest(`v_ocorrencias_publicas?select=id&id=eq.${duplicata.id}`, { key: keys.publicKey });
     exigir(Array.isArray(fontePublica) && fontePublica.length === 0, 'Origem mesclada ainda está na view pública.');
 
     faseAtual = 'gestão de equipe e auditoria';
@@ -381,7 +386,7 @@ async function main() {
       && (row.total - row.com_resposta_oficial === 0 || row.total - row.com_resposta_oficial >= 5)
       && (row.resolvidas_documentadas === 0 || row.resolvidas_documentadas >= 5)
       && (row.total - row.resolvidas_documentadas === 0 || row.total - row.resolvidas_documentadas >= 5)), 'Exportação contém célula/subcontagem abaixo do limiar k=5.');
-    const cellView = await rest('v_dados_painel?select=id,total,com_resposta_oficial,resolvidas_documentadas&limit=5000', { key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY });
+    const cellView = await rest('v_dados_painel?select=id,total,com_resposta_oficial,resolvidas_documentadas&limit=5000', { key: keys.publicKey });
     exigir(Array.isArray(cellView) && cellView.length === dados.dados.length && cellView.every((row) => row.total >= 5), 'View do banco não aplicou supressão antes da exportação.');
 
     faseAtual = 'exclusões dos relatos e sessão';

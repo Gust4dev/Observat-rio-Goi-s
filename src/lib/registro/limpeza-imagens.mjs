@@ -1,11 +1,12 @@
 import { caminhoImagemValido } from './caminho-imagem.mjs';
+import { supabaseApiHeaders } from '../supabase-keys.mjs';
 const DIA = 86400000;
 const PUBLICA = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.jpg$/;
 /** Shared by manual CLI and cron; returns no paths or secrets. */
 export async function limparImagens({ base, key, apply = false, now = Date.now(), fetch: transportar = globalThis.fetch }) {
  const origem = new URL(base);
  if (origem.protocol !== 'https:' || origem.username || origem.password || origem.port || origem.pathname !== '/' || origem.search || origem.hash || !key) throw Error('Configuração inválida');
- const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
+ const headers = { ...supabaseApiHeaders(key), 'Content-Type': 'application/json' };
  async function api(path, init = {}) {
   const r = await transportar(new URL(path, origem), { ...init, headers, cache: 'no-store', signal: AbortSignal.timeout(15000) });
   if (!r.ok) throw Error('Limpeza indisponível'); const dados = await r.json();

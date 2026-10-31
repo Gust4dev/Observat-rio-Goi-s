@@ -10,7 +10,7 @@ beforeEach(() => {
   calls=[]; falha=false; perdida=false; existente=false; retry=false; tokenValido=true; slotLivre=true;
   vi.stubEnv("FOTOS_HABILITADAS", "true");
   limiteFotoConfigurado = randomInt(1, 1_000_000);
-  const valores = { NODE_ENV:"test", VERCEL:"", VERCEL_ENV:"", AMBIENTE_REGISTRO:"staging_ficticio", NEXT_PUBLIC_SUPABASE_URL:"https://db.example", SUPABASE_SERVICE_ROLE_KEY:randomBytes(32).toString("base64url"), HMAC_SEGREDO:randomBytes(32).toString("base64url"), TURNSTILE_SECRET:randomBytes(32).toString("base64url"), NEXT_PUBLIC_TURNSTILE_SITE_KEY:"teste", MODO_PUBLICACAO:"moderar_tudo", LIMITE_FOTO_MAXIMO:String(limiteFotoConfigurado), LIMITE_REGISTRO_MAXIMO:String(randomInt(1, 1_000_000)), LIMITE_ACOMPANHAR_MAXIMO:String(randomInt(1, 1_000_000)), LIMITE_EXCLUIR_MAXIMO:String(randomInt(1, 1_000_000)), LIMITE_JANELA_SEGUNDOS:String(randomInt(1, 1_000_000)), TRIAGEM_JANELA_SEGUNDOS:String(randomInt(1, 1_000_000)), TRIAGEM_LIMITE_ORIGEM:String(randomInt(1, 1_000_000)) };
+  const valores = { NODE_ENV:"test", VERCEL:"", VERCEL_ENV:"", AMBIENTE_REGISTRO:"staging_ficticio", NEXT_PUBLIC_SUPABASE_URL:"https://db.example", SUPABASE_SECRET_KEY:"sb_secret_test", HMAC_SEGREDO:randomBytes(32).toString("base64url"), TURNSTILE_SECRET:randomBytes(32).toString("base64url"), NEXT_PUBLIC_TURNSTILE_SITE_KEY:"teste", MODO_PUBLICACAO:"moderar_tudo", LIMITE_FOTO_MAXIMO:String(limiteFotoConfigurado), LIMITE_REGISTRO_MAXIMO:String(randomInt(1, 1_000_000)), LIMITE_ACOMPANHAR_MAXIMO:String(randomInt(1, 1_000_000)), LIMITE_EXCLUIR_MAXIMO:String(randomInt(1, 1_000_000)), LIMITE_JANELA_SEGUNDOS:String(randomInt(1, 1_000_000)), TRIAGEM_JANELA_SEGUNDOS:String(randomInt(1, 1_000_000)), TRIAGEM_LIMITE_ORIGEM:String(randomInt(1, 1_000_000)) };
   for (const [k,v] of Object.entries(valores)) vi.stubEnv(k,v);
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
     calls.push({url,init});
@@ -56,6 +56,7 @@ it("envia somente objeto reencodado privado e metadata pendente com contexto",as
   const upload=calls.find(c=>c.url.includes("/storage/"))!;
   expect(upload.url).toMatch(/imagens-quarentena\/[a-f0-9]{64}\/1\/[a-f0-9]{64}\.jpg$/);
   expect(upload.url).not.toContain(token);expect(upload.init?.headers).toMatchObject({"x-upsert":"false"});
+  expect(new Headers(upload.init?.headers).get("apikey")).toBe("sb_secret_test");expect(new Headers(upload.init?.headers).has("authorization")).toBe(false);
   expect(JSON.parse(String(calls.find(c=>c.url.endsWith("registrar_imagem"))!.init?.body))).toMatchObject({p_contexto:"Buraco na calçada",p_ordem:1,p_mime:"image/jpeg"});
 });
 it.each(["0","4"])("rejeita slot %s e alt ausente sem upload",async ordem=>{expect((await POST(await req(ordem))).status).toBe(422);expect(calls.some(c=>c.url.includes("/storage/"))).toBe(false);});

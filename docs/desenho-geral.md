@@ -188,14 +188,16 @@ publicamente. Falso positivo é aceitável: vai para a fila, não para o lixo.
 ## 9. Configuração, segredos e ambientes
 | Variável | Onde | Observação |
 |---|---|---|
-| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | cliente e servidor | públicas |
-| `SUPABASE_SERVICE_ROLE_KEY` | **só servidor** | nunca em código, repositório ou navegador; rotacionar |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | servidor e cliente, quando aplicável | chave pública; `sb_publishable_*` vai em `apikey` |
+| `SUPABASE_SECRET_KEY` | **só servidor** | nunca em código cliente, bundle ou logs; `sb_secret_*` vai em `apikey`, sem `Authorization` |
 | `TURNSTILE_SECRET`, `HMAC_SEGREDO` | só servidor | sal diário derivado do segredo |
 | `MODO_PUBLICACAO` | servidor | Registro M3 aceita somente `moderar_tudo`; `texto_automatico` responde 503 |
 | limites de taxa, lista de bloqueio | servidor | não documentar valores |
 
 Ambientes: **local** (Supabase CLI), **staging** (projeto Supabase separado, **sem dados reais**), **produção**.
 Contas de hospedagem, Supabase e domínio pertencem à **organização**, não a uma pessoa.
+
+Durante a migração, `NEXT_PUBLIC_SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY` continuam aceitos como fallback para ambientes já existentes. As novas variáveis têm precedência. Remova os aliases depois que todos os ambientes e scripts estiverem configurados com os nomes novos e a chave legada tiver sido rotacionada em uma operação separada.
 
 ## 10. Lacunas no banco reveladas por este desenho — **resolvidas na migração 007**
 | # | Falta | Como ficou |

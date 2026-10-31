@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "ci:check-public-bundle": "node scripts/ci/check-public-bundle.mjs",
     "start": "next start",
     "lint": "eslint",
     "db:test": "node db/tests/run-pglite.mjs",

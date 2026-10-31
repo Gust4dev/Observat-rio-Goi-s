@@ -8,7 +8,7 @@ function identity(fetcher: ReturnType<typeof vi.fn>, aal = "aal2", role = "moder
   fetcher.mockImplementationOnce(() => ok({ id, factors: [] })).mockImplementationOnce(() => ok([{ user_id: id, papel: role, ativo: active }]));
   return jwt(aal);
 }
-beforeEach(() => { vi.spyOn(console, "info").mockImplementation(() => {}); vi.spyOn(console, "error").mockImplementation(() => {}); vi.stubEnv("VERCEL", ""); vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://db.example"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon"); vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service"); vi.stubEnv("HMAC_SEGREDO", "h".repeat(32)); });
+beforeEach(() => { vi.spyOn(console, "info").mockImplementation(() => {}); vi.spyOn(console, "error").mockImplementation(() => {}); vi.stubEnv("VERCEL", ""); vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://db.example"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test"); vi.stubEnv("SUPABASE_SECRET_KEY", "sb_secret_test"); vi.stubEnv("HMAC_SEGREDO", "h".repeat(32)); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 describe("admin auth", () => {
  it("does not allow rotating emails to bypass the per-origin budget", async () => {

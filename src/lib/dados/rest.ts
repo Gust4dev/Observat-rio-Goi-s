@@ -1,5 +1,6 @@
 import "server-only";
 import type { ZodType } from "zod";
+import { resolveSupabaseKeys, supabaseApiHeaders } from "../supabase-keys.mjs";
 
 // Cliente fetch fino ao PostgREST do Supabase (somente SELECT nas views públicas e tabelas de referência).
 // Sem supabase-js (M2-2). Sempre `select` com lista explícita; query montada com URLSearchParams.
@@ -73,9 +74,9 @@ export function montarQuery(o: OpcoesConsulta): URLSearchParams {
 
 function config(): { base: string; chave: string } {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const chave = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const { publicKey: chave } = resolveSupabaseKeys(process.env);
   if (!url) throw new Error("Variável de ambiente ausente: NEXT_PUBLIC_SUPABASE_URL");
-  if (!chave) throw new Error("Variável de ambiente ausente: NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  if (!chave) throw new Error("Variável de ambiente ausente: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
   return { base: url.replace(/\/+$/, ""), chave };
 }
 
@@ -94,7 +95,7 @@ export async function consultar<T>(
   try {
     resposta = await fetch(url, {
       method: "GET",
-      headers: { apikey: chave, Authorization: `Bearer ${chave}`, Accept: "application/json" },
+      headers: { ...supabaseApiHeaders(chave), Accept: "application/json" },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (e) {

@@ -6,6 +6,7 @@ import { bytea, hmacSha256 } from "./seguranca";
 import { configServidor, rpc } from "./servidor";
 import { exigirStaging } from "./staging";
 import { criarLoggerRequisicao } from "../observabilidade/logger";
+import { supabaseApiHeaders } from "../supabase-keys.mjs";
 
 type Operacao = "denunciar" | "resposta";
 type Config = ReturnType<typeof configServidor>;
@@ -53,7 +54,7 @@ async function registrar(funcao: "registrar_denuncia" | "registrar_resposta", pa
   try {
     resposta = await fetch(`${config.base}/rest/v1/rpc/${funcao}`, {
       method: "POST", cache: "no-store", signal: AbortSignal.timeout(8000),
-      headers: { apikey: config.chave, Authorization: `Bearer ${config.chave}`, "Content-Type": "application/json", Accept: "application/json" },
+      headers: { ...supabaseApiHeaders(config.chave), "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(parametros),
     });
     if (!resposta.ok || !z.boolean().safeParse(await resposta.json()).success) throw new ErroRegistro("indisponivel");

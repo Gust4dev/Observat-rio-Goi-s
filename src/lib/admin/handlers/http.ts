@@ -5,6 +5,7 @@ import { revalidateTag } from "next/cache";
 import { requireAdmin } from "@/lib/admin/auth/http";
 import { criarLoggerRequisicao } from "@/lib/observabilidade/logger";
 import { caminhoImagemValido } from "@/lib/registro/caminho-imagem.mjs";
+import { resolveSupabaseKeys, supabaseApiHeaders } from "@/lib/supabase-keys.mjs";
 
 const uuid = z.uuid();
 const texto = z.string().trim().min(1).max(4000);
@@ -20,15 +21,15 @@ const cursor = z.strictObject({ criado_em: z.iso.datetime({ offset: true }), id:
 class Falha extends Error { constructor(readonly status: number, readonly codigoExterno?: string) { super("Operação administrativa indisponível."); } }
 class SmtpIndisponivel extends Error {}
 function config() {
-  try { const url = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""); const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  try { const url = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""); const key = resolveSupabaseKeys(process.env).publicKey;
     if (url.protocol !== "https:" || url.username || url.password || url.pathname !== "/" || url.search || url.hash || !key) throw new Error();
     return { base: url.origin, key };
   } catch { throw new Falha(503); }
 }
 async function chamar(token: string, path: string, data?: unknown, service = false) {
-  const c = config(); const key = service ? process.env.SUPABASE_SERVICE_ROLE_KEY : c.key;
+  const c = config(); const key = service ? resolveSupabaseKeys(process.env).secretKey : c.key;
   if (!key) throw new Falha(503);
-  const result = await fetch(c.base + path, { method: data === undefined ? "GET" : "POST", cache: "no-store", signal: AbortSignal.timeout(10000), headers: { apikey: key, Authorization: `Bearer ${service ? key : token}`, "Content-Type": "application/json", Prefer: "count=exact" }, ...(data === undefined ? {} : { body: JSON.stringify(data) }) });
+  const result = await fetch(c.base + path, { method: data === undefined ? "GET" : "POST", cache: "no-store", signal: AbortSignal.timeout(10000), headers: { ...supabaseApiHeaders(key, service ? undefined : token), "Content-Type": "application/json", Prefer: "count=exact" }, ...(data === undefined ? {} : { body: JSON.stringify(data) }) });
   if (!result.ok) {
     const error = await result.json().catch(() => ({}));
     const falhaDeEntrega = error.code === "email_provider_disabled" || result.status === 429

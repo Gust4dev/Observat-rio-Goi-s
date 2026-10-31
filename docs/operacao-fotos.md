@@ -15,7 +15,7 @@ node --env-file=.env.local scripts/limpar-quarentena.mjs
 node --env-file=.env.local scripts/limpar-quarentena.mjs --apply
 ```
 
-São necessários `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` somente no servidor. A saída contém contagens, sem caminhos ou segredos.
+São necessários `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SECRET_KEY` somente no servidor. `SUPABASE_SERVICE_ROLE_KEY` continua aceito temporariamente como fallback até a configuração dos ambientes ser migrada; remova-o depois da rotação legada. Chaves `sb_secret_*` vão apenas em `apikey`, nunca em `Authorization`. A saída contém contagens, sem caminhos ou segredos.
 
 ## Vercel
 

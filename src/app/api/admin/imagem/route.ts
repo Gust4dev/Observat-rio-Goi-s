@@ -1,3 +1,4 @@
+import "server-only";
 import { createHash } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { z } from "zod";
@@ -7,6 +8,7 @@ import { ErroRegistro, respostaErro } from "@/lib/registro/erros";
 import { exigirStaging } from "@/lib/registro/staging";
 import { caminhoImagemValido } from "@/lib/registro/caminho-imagem.mjs";
 import { mesmaOrigem } from "@/lib/seguranca/origem";
+import { resolveSupabaseKeys, supabaseApiHeaders } from "@/lib/supabase-keys.mjs";
 
 const checklist=z.object({rosto:z.boolean(),menor:z.boolean(),placa:z.boolean(),numero_residencia:z.boolean(),documento:z.boolean(),agressao:z.boolean()}).strict();
 const entrada=z.object({imagem_id:z.uuid(),acao:z.enum(["aprovar","remover"]),descricao_publica:z.string().trim().min(1).max(300).optional(),motivo:z.string().trim().min(1).max(1000).optional(),checklist}).strict().refine(v=>v.acao==="aprovar"?Boolean(v.descricao_publica)&&Object.values(v.checklist).every(x=>!x):Boolean(v.motivo));
@@ -28,7 +30,7 @@ function exigirMfa(jwt:string,usuarioId:string){
  }catch{throw new FalhaAdmin(403);}
 }
 function configuracao(){
- const base=new URL(process.env.NEXT_PUBLIC_SUPABASE_URL??"");const anon=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+ const base=new URL(process.env.NEXT_PUBLIC_SUPABASE_URL??"");const anon=resolveSupabaseKeys(process.env).publicKey;
  if(base.protocol!=="https:"||base.username||base.password||base.pathname!=="/"||base.search||base.hash||!anon)throw new FalhaAdmin(503);
  return {base:base.origin,anon};
 }
@@ -39,7 +41,7 @@ export async function POST(request:Request){
  try{
   if(!request.headers.get("authorization")?.trim().toLowerCase().startsWith("bearer ")&&(!mesmaOrigem(request)||request.headers.get("X-Observatorio-CSRF")!=="1"))throw new FalhaAdmin(403);
   if(!fotosHabilitadas())throw new ErroRegistro("indisponivel");exigirStaging(request);
-  const jwt=credencial(request);const config=configuracao();const usuarioHeaders={apikey:config.anon,Authorization:`Bearer ${jwt}`,"Content-Type":"application/json"};
+  const jwt=credencial(request);const config=configuracao();const usuarioHeaders={...supabaseApiHeaders(config.anon,jwt),"Content-Type":"application/json"};
   const auth=await chamar(config.base,"/auth/v1/user",usuarioHeaders);
   const usuario=auth.ok?z.object({id:z.uuid()}).safeParse(await auth.json()):null;if(!usuario?.success)throw new FalhaAdmin(401);
   exigirMfa(jwt,usuario.data.id);
@@ -51,8 +53,8 @@ export async function POST(request:Request){
   const preparacao=await rpc("admin_preparar_imagem",{p_imagem_id:dados.imagem_id,p_acao:dados.acao});
   const linhas=z.array(z.object({out_operacao:z.uuid(),out_caminho:z.string(),out_moderacao:z.string()})).length(1).safeParse(await preparacao.json());
   if(!linhas.success||!caminhoImagemValido(linhas.data[0].out_caminho))throw new FalhaAdmin(503);
-  const operacao=linhas.data[0];const chave=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!chave)throw new FalhaAdmin(503);
-  const storageHeaders={apikey:chave,Authorization:`Bearer ${chave}`};const publico=`/storage/v1/object/imagens-publicas/${dados.imagem_id}.jpg`;const privado=`/storage/v1/object/imagens-quarentena/${operacao.out_caminho}`;
+  const operacao=linhas.data[0];const chave=resolveSupabaseKeys(process.env).secretKey;if(!chave)throw new FalhaAdmin(503);
+  const storageHeaders=supabaseApiHeaders(chave);const publico=`/storage/v1/object/imagens-publicas/${dados.imagem_id}.jpg`;const privado=`/storage/v1/object/imagens-quarentena/${operacao.out_caminho}`;
   const apagar=async(path:string)=>{const r=await chamar(config.base,path,storageHeaders,{method:"DELETE"});if(!r.ok&&r.status!==404)throw new FalhaAdmin(503);};
   const abandonar=()=>rpc("admin_abandonar_imagem",{p_imagem_id:dados.imagem_id,p_operacao:operacao.out_operacao});
   let copiada=false;

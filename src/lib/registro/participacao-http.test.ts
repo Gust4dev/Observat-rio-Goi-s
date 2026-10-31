@@ -15,7 +15,7 @@ beforeEach(() => {
   chamadas = []; captcha = true; limite = true; retorno = true; falha = ""; malformado = false;
   vi.stubEnv("NODE_ENV", "test"); vi.stubEnv("VERCEL", ""); vi.stubEnv("VERCEL_ENV", "");
   vi.stubEnv("AMBIENTE_REGISTRO", "staging_ficticio"); vi.stubEnv("MODO_PUBLICACAO", "moderar_tudo");
-  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://db.example"); vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "segredo-ficticio");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://db.example"); vi.stubEnv("SUPABASE_SECRET_KEY", "sb_secret_test");
   vi.stubEnv("TURNSTILE_SECRET", "captcha-segredo"); vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-ficticio"); vi.stubEnv("HMAC_SEGREDO", "h".repeat(32));
   for (const nome of ["LIMITE_FOTO_MAXIMO", "LIMITE_REGISTRO_MAXIMO", "LIMITE_ACOMPANHAR_MAXIMO", "LIMITE_EXCLUIR_MAXIMO", "LIMITE_JANELA_SEGUNDOS", "TRIAGEM_JANELA_SEGUNDOS", "TRIAGEM_LIMITE_ORIGEM", "LIMITE_DENUNCIA_MAXIMO", "LIMITE_RESPOSTA_MAXIMO"]) vi.stubEnv(nome, "5");
   vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
@@ -43,7 +43,7 @@ describe.each([{ nome: "denunciar", post: denunciar, entrada: denuncia, rpc: "re
     expect(JSON.stringify(escritas.map(c => c.body))).not.toContain("local-sem-endereco");
   });
   it("fecha sem env e com limite inválido, sem chamadas externas", async () => {
-    for (const nome of [env, "SUPABASE_SERVICE_ROLE_KEY", "TURNSTILE_SECRET"]) {
+    for (const nome of [env, "SUPABASE_SECRET_KEY", "TURNSTILE_SECRET"]) {
       const anterior = process.env[nome]; vi.stubEnv(nome, ""); expect((await post(request(entrada))).status).toBe(503); vi.stubEnv(nome, anterior!);
     }
     vi.stubEnv(env, "1.5"); expect((await post(request(entrada))).status).toBe(503); expect(chamadas).toHaveLength(0);

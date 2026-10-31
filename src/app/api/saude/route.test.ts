@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
   vi.spyOn(console, "info").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -40,10 +41,11 @@ it("desabilita cache, indexação e referência e correlaciona resposta com log 
   expect(output).not.toMatch(/secret|example|token|cookie|authorization/i);
 });
 
-it("consulta apenas recurso público com anon via HEAD sem conteúdo e sem cache", async () => {
+it("consulta recurso público com a publishable key somente em apikey", async () => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://public.supabase.co/");
-  vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-test");
-  vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service-secret");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "legacy-public-ignored");
+  vi.stubEnv("SUPABASE_SECRET_KEY", "sb_secret_not_public");
   let sent: RequestInit | undefined;
   let target = "";
   vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
@@ -56,9 +58,23 @@ it("consulta apenas recurso público com anon via HEAD sem conteúdo e sem cache
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ aplicacao: "ok", banco: "ok" });
   expect(target).toBe("https://public.supabase.co/rest/v1/municipios?select=slug&limit=1");
-  expect(sent).toMatchObject({ method: "HEAD", cache: "no-store", redirect: "error", headers: { apikey: "anon-test", Authorization: "Bearer anon-test" } });
+  expect(sent).toMatchObject({ method: "HEAD", cache: "no-store", redirect: "error", headers: { apikey: "sb_publishable_test" } });
+  expect(new Headers(sent?.headers).has("authorization")).toBe(false);
   expect(sent?.signal).toBeInstanceOf(AbortSignal);
-  expect(JSON.stringify(sent)).not.toContain("service-secret");
+  expect(JSON.stringify(sent)).not.toContain("sb_secret_not_public");
+});
+
+it("mantém o fallback Bearer de uma chave anon JWT legada", async () => {
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://public.supabase.co");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "");
+  const legacy = "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.signature";
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", legacy);
+  let sent: RequestInit | undefined;
+  vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => { sent = init; return new Response(null, { status: 200 }); });
+  const { GET } = await import("./route");
+  expect((await GET(request())).status).toBe(200);
+  expect(new Headers(sent?.headers).get("apikey")).toBe(legacy);
+  expect(new Headers(sent?.headers).get("authorization")).toBe(`Bearer ${legacy}`);
 });
 
 it("trata URL inválida como indisponibilidade sem revelar configuração", async () => {

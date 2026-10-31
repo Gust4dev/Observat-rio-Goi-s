@@ -1,8 +1,9 @@
 import { criarLoggerRequisicao, type EstadoBanco } from "@/lib/observabilidade/logger";
+import { resolveSupabaseKeys, supabaseApiHeaders } from "@/lib/supabase-keys.mjs";
 
 async function verificarBanco(): Promise<EstadoBanco> {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const chave = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const { publicKey: chave } = resolveSupabaseKeys(process.env);
   if (!base || !chave) return "nao_configurado";
 
   try {
@@ -10,7 +11,7 @@ async function verificarBanco(): Promise<EstadoBanco> {
     if (url.protocol !== "https:" && url.protocol !== "http:") return "indisponivel";
     const resposta = await fetch(url.toString(), {
       method: "HEAD",
-      headers: { apikey: chave, Authorization: `Bearer ${chave}` },
+      headers: supabaseApiHeaders(chave),
       cache: "no-store",
       redirect: "error",
       signal: AbortSignal.timeout(3000),

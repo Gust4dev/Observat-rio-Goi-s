@@ -99,7 +99,7 @@ describe("erros públicos", () => {
 
 function ambiente() {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://exemplo.supabase.co");
-  vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "segredo-ficticio");
+  vi.stubEnv("SUPABASE_SECRET_KEY", "sb_secret_fictitious");
   vi.stubEnv("TURNSTILE_SECRET", "captcha-ficticio");
   vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-ficticio");
   vi.stubEnv("HMAC_SEGREDO", "h".repeat(32));
@@ -109,14 +109,14 @@ function ambiente() {
 describe("cliente de servidor", () => {
   it("lê as credenciais por nome composto no runtime e não aceita ausência de cada uma", () => {
     ambiente();
-    expect(configServidor()).toMatchObject({ chave: "segredo-ficticio", turnstileSecret: "captcha-ficticio", hmacSegredo: "h".repeat(32) });
-    for (const nome of ["SUPABASE_SERVICE_ROLE_KEY", "TURNSTILE_SECRET", "HMAC_SEGREDO"]) {
+    expect(configServidor()).toMatchObject({ chave: "sb_secret_fictitious", turnstileSecret: "captcha-ficticio", hmacSegredo: "h".repeat(32) });
+    for (const nome of ["SUPABASE_SECRET_KEY", "TURNSTILE_SECRET", "HMAC_SEGREDO"]) {
       ambiente(); vi.stubEnv(nome, "");
       expect(() => configServidor()).toThrow(ErroRegistro);
     }
   });
   it("falha fechado sem env e não informa nome ou valor ausente", () => {
-    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
+    vi.stubEnv("SUPABASE_SECRET_KEY", "");
     expect(() => configServidor()).toThrow(ErroRegistro);
     expect(() => configServidor()).toThrow("Não foi possível concluir agora.");
   });
@@ -156,7 +156,8 @@ describe("cliente de servidor", () => {
       expect(init.method).toBe("POST");
       expect(init.cache).toBe("no-store");
       expect(JSON.parse(String(init.body))).toEqual({ p_chave: "\\x1234" });
-      expect(new Headers(init.headers).get("authorization")).toBe("Bearer segredo-ficticio");
+      expect(new Headers(init.headers).get("apikey")).toBe("sb_secret_fictitious");
+      expect(new Headers(init.headers).has("authorization")).toBe(false);
       return Response.json(true);
     });
     expect(await rpc("consumir_limite", { p_chave: "\\x1234" }, z.boolean())).toBe(true);

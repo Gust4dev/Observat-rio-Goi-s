@@ -75,7 +75,7 @@ it("cron falha fechado sem segredo ou com segredo errado e não chama Storage",a
  expect(resposta.status).toBe(401);expect(resposta.headers.get("cache-control")).toContain("no-store");expect(fetch).not.toHaveBeenCalled();
 });
 it("cron autorizado aplica a mesma limpeza e passa pelo proxy sem Basic",async()=>{
- vi.stubEnv("CRON_SECRET","segredo-longo");vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL","https://teste.supabase.co");vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY","secret");
+ vi.stubEnv("CRON_SECRET","segredo-longo");vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL","https://teste.supabase.co");vi.stubEnv("SUPABASE_SECRET_KEY","sb_secret_test");
  const {transport,deletes}=storage();vi.stubGlobal("fetch",transport);
  const request=new Request("https://teste/api/cron/limpar-quarentena",{headers:{authorization:"Bearer segredo-longo"}});
  expect((await GET(request)).status).toBe(200);expect(deletes).toHaveLength(2);

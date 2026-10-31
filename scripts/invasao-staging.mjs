@@ -4,6 +4,7 @@
 // OpenAPI é evidência de privilégios; não substitui testes transacionais de escrita no banco.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveSupabaseKeys, supabaseApiHeaders } from '../src/lib/supabase-keys.mjs';
 
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 try { process.loadEnvFile(path.join(raiz, '.env.local')); }
@@ -16,7 +17,7 @@ catch (erro) {
 const REF_STAGING = 'hvekgzxuciyewtybwads';
 let base;
 try { base = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''); } catch { /* validado abaixo */ }
-const chave = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
+const { publicKey: chave } = resolveSupabaseKeys(process.env);
 if (!base || base.origin !== `https://${REF_STAGING}.supabase.co` || base.pathname !== '/' ||
     base.username || base.password || base.search || base.hash || !chave) {
   console.error('FALHA: configure a URL exata do staging conhecido e a chave pública anon.');
@@ -45,8 +46,7 @@ const verificar = (condicao, descricao) => {
   console.log(`${condicao ? 'ok' : 'FALHA'} ${descricao}`);
   if (!condicao) falhas++;
 };
-const headers = { apikey: chave, Accept: 'application/json' };
-if (!chave.startsWith('sb_publishable_')) headers.Authorization = `Bearer ${chave}`;
+const headers = { ...supabaseApiHeaders(chave), Accept: 'application/json' };
 async function ler(caminho, extras = {}, rpcSemArgumentos = false) {
   try {
     const resposta = await fetch(new URL(caminho, base), {

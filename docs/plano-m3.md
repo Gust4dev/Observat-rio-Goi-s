@@ -89,7 +89,7 @@ Sem arquivos de produto permitidos; pode atualizar apenas registro local de prog
 - Rodar `npm test`, `npm run db:test`, `npm run typecheck`, `npm run lint`, `npm run build`, `npm run contrato:staging` se env disponível.
 - Navegador embutido a 375 px cobre formulário, sucesso, acompanhar, erro e indisponível; conferir teclado, foco, contraste e alvo, restaurando viewport.
 - Executar ataques de XSS como texto, payloads gigantes/Unicode/JSON inválido, enumeração de token, vazamento de logs/URL e busca de segredos no `.next/`.
-- Se `SUPABASE_SERVICE_ROLE_KEY` já existir, iniciar build e servidor com credenciais só no ambiente do processo, criar relato fictício, consultar/excluir e limpar somente as linhas criadas, nunca `TESTE-*`. Se faltar, registrar o roteiro exato como pendente do usuário.
+- Se `SUPABASE_SECRET_KEY` (ou o fallback legado `SUPABASE_SERVICE_ROLE_KEY`) já existir, iniciar build e servidor com credenciais só no ambiente do processo, criar relato fictício, consultar/excluir e limpar somente as linhas criadas, nunca `TESTE-*`. Se faltar, registrar o roteiro exato como pendente do usuário.
 
 ## 4. Fechamento
 

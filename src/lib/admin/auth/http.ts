@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import { isIP } from "node:net";
 import { mesmaOrigem } from "@/lib/seguranca/origem";
 import { criarLoggerRequisicao } from "@/lib/observabilidade/logger";
+import { resolveSupabaseKeys, supabaseApiHeaders } from "@/lib/supabase-keys.mjs";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -20,14 +21,14 @@ class Failure extends Error { constructor(readonly status: number, readonly codi
 function config() {
   try {
     const url = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const key = resolveSupabaseKeys(process.env).publicKey;
     if (url.protocol !== "https:" || url.username || url.password || url.pathname !== "/" || url.search || url.hash || !key) throw new Error();
     return { base: url.origin, key };
   } catch { throw new Failure(503); }
 }
 async function call(path: string, jwt?: string, body?: unknown, method = body === undefined ? "GET" : "POST") {
   const c = config();
-  return fetch(c.base + path, { method, cache: "no-store", signal: AbortSignal.timeout(10000), headers: { apikey: c.key, Authorization: `Bearer ${jwt ?? c.key}`, "Content-Type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  return fetch(c.base + path, { method, cache: "no-store", signal: AbortSignal.timeout(10000), headers: { ...supabaseApiHeaders(c.key, jwt), "Content-Type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 }
 function cookie(req: Request, name: string) {
   const raw = req.headers.get("cookie")?.split(";").map(v => v.trim()).find(v => v.startsWith(name + "="))?.slice(name.length + 1);
@@ -95,7 +96,7 @@ export async function requireAdmin(req: Request, minimum: z.infer<typeof roleSch
   return { ...identity.admin, token: jwt };
 }
 async function throttle(req: Request, email: string) {
-  const secret = process.env.HMAC_SEGREDO, service = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const secret = process.env.HMAC_SEGREDO, service = resolveSupabaseKeys(process.env).secretKey;
   if (!secret || Buffer.byteLength(secret) < 32 || !service) throw new Failure(503);
   // The ingress must overwrite XFF; arbitrary public proxy headers are never trusted.
   let origin = "local-sem-endereco";
@@ -108,7 +109,7 @@ async function throttle(req: Request, email: string) {
   const c = config();
   for (const key of keys) {
   const hash = createHmac("sha256", secret).update(JSON.stringify(key)).digest("hex");
-  const result = await fetch(c.base + "/rest/v1/rpc/consumir_limite", { method: "POST", cache: "no-store", signal: AbortSignal.timeout(10000), headers: { apikey: service, Authorization: `Bearer ${service}`, "Content-Type": "application/json" }, body: JSON.stringify({ p_chave: `\\x${hash}`, p_janela: "900 seconds", p_maximo: 5 }) });
+  const result = await fetch(c.base + "/rest/v1/rpc/consumir_limite", { method: "POST", cache: "no-store", signal: AbortSignal.timeout(10000), headers: { ...supabaseApiHeaders(service), "Content-Type": "application/json" }, body: JSON.stringify({ p_chave: `\\x${hash}`, p_janela: "900 seconds", p_maximo: 5 }) });
   if (!result.ok) throw new Failure(503);
   const allowed = z.boolean().parse(await result.json()); if (!allowed) throw new Failure(429);
   }

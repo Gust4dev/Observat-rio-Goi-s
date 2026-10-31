@@ -8,7 +8,7 @@ const checklist={rosto:false,menor:false,placa:false,numero_residencia:false,doc
 let calls:{url:string;init?:RequestInit}[], role=true, failRpc=false, failDelete=false, duplicate=false, publicExists=false, uploadLost=false, rpcCommitted=false, rpcCommittedAction="aprovar";
 const content=new Uint8Array([255,216,255,1]);
 beforeEach(()=>{tokenJwt=jwt;calls=[];revalidate.mockReset();revalidate.mockImplementation((tag:string)=>calls.push({url:`cache:${tag}`}));role=true;failRpc=false;failDelete=false;duplicate=false;publicExists=false;uploadLost=false;rpcCommitted=false;rpcCommittedAction="aprovar";
- for(const [k,v] of Object.entries({FOTOS_HABILITADAS:"true",AMBIENTE_REGISTRO:"staging_ficticio",VERCEL:"",VERCEL_ENV:"",NEXT_PUBLIC_SUPABASE_URL:"https://test.supabase.co",NEXT_PUBLIC_SUPABASE_ANON_KEY:"anon",SUPABASE_SERVICE_ROLE_KEY:"service",MODO_PUBLICACAO:"moderar_tudo"}))vi.stubEnv(k,v);
+ for(const [k,v] of Object.entries({FOTOS_HABILITADAS:"true",AMBIENTE_REGISTRO:"staging_ficticio",VERCEL:"",VERCEL_ENV:"",NEXT_PUBLIC_SUPABASE_URL:"https://test.supabase.co",NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:"sb_publishable_test",SUPABASE_SECRET_KEY:"sb_secret_test",MODO_PUBLICACAO:"moderar_tudo"}))vi.stubEnv(k,v);
  vi.stubGlobal("fetch",async(url:string,init?:RequestInit)=>{calls.push({url,init});
   if(url.endsWith("/auth/v1/user"))return Response.json({id:user});
   if(url.includes("/administradores?"))return Response.json(role?[{user_id:user,papel:"moderador",ativo:true}]:[]);

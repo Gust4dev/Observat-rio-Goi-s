@@ -45,6 +45,13 @@ jobs:
         env:
           # These placeholders grant no access and require no repository secrets.
           NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci-dummy-key
+          SUPABASE_SECRET_KEY: sb_secret_ci-dummy-key
+          SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.ci-dummy-signature
           NEXT_PUBLIC_TURNSTILE_SITE_KEY: ci-dummy-site-key
           NEXT_PUBLIC_SITE_URL: https://ci.example.invalid
+      - name: Check privileged key markers in public bundle
+        run: npm run ci:check-public-bundle
+        env:
+          SUPABASE_SECRET_KEY: sb_secret_ci-dummy-key
+          SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.ci-dummy-signature

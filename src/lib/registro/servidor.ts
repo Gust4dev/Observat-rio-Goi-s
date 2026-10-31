@@ -1,6 +1,7 @@
 import "server-only";
 import type { ZodType } from "zod";
 import { ErroRegistro } from "./erros";
+import { resolveSupabaseKeys, supabaseApiHeaders } from "../supabase-keys.mjs";
 
 const FUNCOES = ["registrar_ocorrencia", "registrar_imagem", "consultar_slot_imagem", "acompanhar_por_token", "solicitar_exclusao_por_token", "consumir_limite", "triagem_sinais"] as const;
 export type FuncaoRegistro = (typeof FUNCOES)[number];
@@ -39,10 +40,12 @@ export function configServidor() {
   const modoPublicacao = process.env.MODO_PUBLICACAO?.trim() || "moderar_tudo";
   if (modoPublicacao !== "moderar_tudo" && modoPublicacao !== "texto_automatico") throw new ErroRegistro("indisponivel");
   const hmacSegredo = obrigatoria("HMAC", "SEGREDO");
+  const chave = resolveSupabaseKeys(process.env).secretKey;
+  if (!chave) throw new ErroRegistro("indisponivel");
   if (Buffer.byteLength(hmacSegredo, "utf8") < 32) throw new ErroRegistro("indisponivel");
   return {
     base: url.origin,
-    chave: obrigatoria("SUPABASE", "SERVICE", "ROLE", "KEY"),
+    chave,
     turnstileSecret: obrigatoria("TURNSTILE", "SECRET"),
     turnstileSiteKey: obrigatoria("NEXT_PUBLIC_TURNSTILE_SITE_KEY"),
     hmacSegredo,
@@ -63,7 +66,7 @@ export async function rpc<T>(funcao: FuncaoRegistro, parametros: Record<string, 
   try {
     resposta = await fetch(`${base}/rest/v1/rpc/${funcao}`, {
       method: "POST", cache: "no-store", signal: AbortSignal.timeout(8000),
-      headers: { apikey: chave, Authorization: `Bearer ${chave}`, "Content-Type": "application/json", Accept: "application/json" },
+      headers: { ...supabaseApiHeaders(chave), "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(parametros),
     });
   } catch { throw new ErroRegistro("indisponivel"); }

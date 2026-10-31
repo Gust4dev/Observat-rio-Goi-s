@@ -22,7 +22,7 @@ beforeEach(() => {
   vi.stubEnv("NODE_ENV", "test"); vi.stubEnv("VERCEL", "");
   vi.stubEnv("AMBIENTE_REGISTRO", "staging_ficticio"); vi.stubEnv("VERCEL_ENV", "");
   vi.stubEnv("ACESSO_STAGING_USUARIO", ""); vi.stubEnv("ACESSO_STAGING_SENHA", "");
-  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://db.example"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "publica-ficticia"); vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "segredo-ficticio"); vi.stubEnv("TURNSTILE_SECRET", "captcha-ficticio"); vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-ficticio"); vi.stubEnv("HMAC_SEGREDO", "h".repeat(32)); vi.stubEnv("MODO_PUBLICACAO", "");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://db.example"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test"); vi.stubEnv("SUPABASE_SECRET_KEY", "sb_secret_test"); vi.stubEnv("TURNSTILE_SECRET", "captcha-ficticio"); vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-ficticio"); vi.stubEnv("HMAC_SEGREDO", "h".repeat(32)); vi.stubEnv("MODO_PUBLICACAO", "");
   for (const nome of ["LIMITE_FOTO_MAXIMO", "LIMITE_REGISTRO_MAXIMO", "LIMITE_ACOMPANHAR_MAXIMO", "LIMITE_EXCLUIR_MAXIMO", "LIMITE_JANELA_SEGUNDOS", "TRIAGEM_JANELA_SEGUNDOS", "TRIAGEM_LIMITE_ORIGEM"]) vi.stubEnv(nome, "5");
   vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input); const body = init?.body ? JSON.parse(String(init.body)) : {};
@@ -119,8 +119,8 @@ describe("registro HTTP", () => {
     expect((await registrar(local)).status).toBe(201);
   });
   it("falha fechado sem env e sem ecoar falha do banco/fetch", async () => {
-    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", ""); expect((await registrar(request())).status).toBe(503); expect(chamadas).toHaveLength(0);
-    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "ficticio"); falha = "triagem_sinais"; const r = await registrar(request()); expect(r.status).toBe(503); expect(JSON.stringify(await r.json())).not.toMatch(/segredo|IP|token texto/);
+    vi.stubEnv("SUPABASE_SECRET_KEY", ""); expect((await registrar(request())).status).toBe(503); expect(chamadas).toHaveLength(0);
+    vi.stubEnv("SUPABASE_SECRET_KEY", "sb_secret_test"); falha = "triagem_sinais"; const r = await registrar(request()); expect(r.status).toBe(503); expect(JSON.stringify(await r.json())).not.toMatch(/segredo|IP|token texto/);
     vi.stubGlobal("fetch", async () => { throw new Error("segredo"); }); expect((await registrar(request())).status).toBe(503);
   });
   it("não usa User-Agent para permitir troca de chave de limite", async () => {
@@ -133,7 +133,8 @@ describe("registro HTTP", () => {
   });
   it("resolve referência com papel público, select explícito e filtro codificado", async () => {
     vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
-      expect(new Headers(init.headers).get("authorization")).toBe("Bearer publica-ficticia");
+      expect(new Headers(init.headers).get("apikey")).toBe("sb_publishable_test");
+      expect(new Headers(init.headers).has("authorization")).toBe(false);
       expect(String(url)).toContain("select=id%2Cslug"); expect(String(url)).toContain("slug=eq.anapolis"); expect(init.cache).toBe("no-store");
       return Response.json([{ id: 1, slug: "anapolis" }]);
     });

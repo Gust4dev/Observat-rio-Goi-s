@@ -1,4 +1,5 @@
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
+import { resolveSupabaseKeys, supabaseApiHeaders } from '../../src/lib/supabase-keys.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ROLE = new Set(['moderador', 'gestor', 'superadmin']);
@@ -6,8 +7,7 @@ const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
 function configuracao() {
   const raw = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
-  const service = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+  const { publicKey: anon, secretKey: service } = resolveSupabaseKeys(process.env);
   const url = new URL(raw);
   if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash || !anon || !service) {
     throw new Error('Configuração Supabase ausente ou inválida.');
@@ -42,7 +42,7 @@ async function requisicao(config, path, { method = 'GET', body, token, service =
   const key = service ? config.service : config.anon;
   const init = {
     method, cache: 'no-store', signal: AbortSignal.timeout(12_000),
-    headers: { apikey: key, Authorization: `Bearer ${token ?? key}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: { ...supabaseApiHeaders(key, token), 'Content-Type': 'application/json', Accept: 'application/json' },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   };
   let resposta;

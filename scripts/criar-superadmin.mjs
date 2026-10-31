@@ -1,11 +1,11 @@
 import { codigoTotp } from './lib/admin-ficticio.mjs';
+import { resolveSupabaseKeys, supabaseApiHeaders } from '../src/lib/supabase-keys.mjs';
 
 try { process.loadEnvFile(new URL('../.env.local', import.meta.url)); } catch { /* env may be injected by the operator */ }
 
 function config() {
   const url = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '');
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
-  const service = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+  const { publicKey: anon, secretKey: service } = resolveSupabaseKeys();
   const email = process.env.ADMIN_BOOTSTRAP_EMAIL?.trim().toLowerCase() ?? '';
   const password = process.env.ADMIN_BOOTSTRAP_PASSWORD ?? '';
   if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash || !anon || !service
@@ -17,7 +17,7 @@ async function api(c, path, { method = 'GET', body, token, admin = false, prefer
   const key = admin ? c.service : c.anon;
   const response = await fetch(c.base + path, {
     method, cache: 'no-store', signal: AbortSignal.timeout(12_000),
-    headers: { apikey: key, Authorization: `Bearer ${token ?? key}`, 'Content-Type': 'application/json', Accept: 'application/json', ...(prefer ? { Prefer: prefer } : {}) },
+    headers: { ...supabaseApiHeaders(key, token), 'Content-Type': 'application/json', Accept: 'application/json', ...(prefer ? { Prefer: prefer } : {}) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const data = response.status === 204 ? null : await response.json().catch(() => null);

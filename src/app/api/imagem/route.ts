@@ -1,3 +1,4 @@
+import "server-only";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { tokenSchema } from "@/lib/registro/token";
@@ -9,6 +10,7 @@ import { exigirStaging } from "@/lib/registro/staging";
 import { mesmaOrigem } from "@/lib/seguranca/origem";
 import { caminhoImagem } from "@/lib/registro/caminho-imagem.mjs";
 import { MAX_IMAGEM, prepararImagem } from "@/lib/registro/imagem";
+import { supabaseApiHeaders } from "@/lib/supabase-keys.mjs";
 
 const MAX_REQUEST = MAX_IMAGEM + 16 * 1024;
 const campos = z.object({ token: tokenSchema, ordem: z.coerce.number().int().min(1).max(3), contexto: z.string().trim().min(3).max(300).refine(v => !/[\u0000-\u001f\u007f]/.test(v)) }).strict();
@@ -47,7 +49,7 @@ export async function POST(request: Request) {
     const bytes = await prepararImagem(original, foto.type);
     const digest = createHash("sha256").update(bytes).digest("hex");
     const caminho = caminhoImagem(hmacSha256(config.hmacSegredo, `foto:${hash}`), entrada.data.ordem, digest);
-    const headers = { apikey: config.chave, Authorization: `Bearer ${config.chave}` };
+    const headers = supabaseApiHeaders(config.chave);
     const storage = `${config.base}/storage/v1/object/imagens-quarentena/${caminho}`;
     const upload = await fetch(storage, { method: "POST", headers: { ...headers, "Content-Type": "image/jpeg", "x-upsert": "false" }, body: new Uint8Array(bytes), cache: "no-store", signal: AbortSignal.timeout(15000) });
     // Storage retries may find the immutable object left by a lost response.

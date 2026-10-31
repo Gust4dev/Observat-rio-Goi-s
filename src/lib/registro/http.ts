@@ -5,6 +5,7 @@ import { ErroRegistro, respostaErro } from "./erros";
 import { bytea, chaveLimite, hmacOrigem } from "./seguranca";
 import { configServidor, rpc } from "./servidor";
 import { mesmaOrigem } from "../seguranca/origem";
+import { resolveSupabaseKeys, supabaseApiHeaders } from "../supabase-keys.mjs";
 
 type Operacao = "registrar" | "acompanhar" | "excluir" | "foto";
 export type ConfigRegistro = ReturnType<typeof configServidor>;
@@ -74,11 +75,11 @@ export async function limitarHttp(request: Request, config: ConfigRegistro, oper
 
 export async function resolverReferencia(recurso: "municipios" | "categorias", slug: string, config: ConfigRegistro): Promise<number> {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) throw new ErroRegistro("entrada_invalida");
-  const chavePublica = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  const chavePublica = resolveSupabaseKeys(process.env).publicKey;
   if (!chavePublica) throw new ErroRegistro("indisponivel");
   const query = new URLSearchParams({ select: "id,slug", slug: `eq.${slug}`, limit: "1" });
   let r: Response;
-  try { r = await fetch(`${config.base}/rest/v1/${recurso}?${query}`, { cache: "no-store", headers: { apikey: chavePublica, Authorization: `Bearer ${chavePublica}`, Accept: "application/json" }, signal: AbortSignal.timeout(8000) }); }
+  try { r = await fetch(`${config.base}/rest/v1/${recurso}?${query}`, { cache: "no-store", headers: { ...supabaseApiHeaders(chavePublica), Accept: "application/json" }, signal: AbortSignal.timeout(8000) }); }
   catch { throw new ErroRegistro("indisponivel"); }
   if (!r.ok) throw new ErroRegistro("indisponivel");
   let corpo: unknown; try { corpo = await r.json(); } catch { throw new ErroRegistro("indisponivel"); }

@@ -1,11 +1,12 @@
 import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
+import { supabaseApiHeaders } from '../../src/lib/supabase-keys.mjs';
 import { limparImagens } from '../../src/lib/registro/limpeza-imagens.mjs';
 const REF = 'hvekgzxuciyewtybwads';
 const COLUNAS = 'id,ocorrencia_id,ordem,descricao_publica';
 const checklist = { rosto:false, menor:false, placa:false, numero_residencia:false, documento:false, agressao:false };
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
-function headers(key) { return { apikey:key, Authorization:`Bearer ${key}`, 'Content-Type':'application/json' }; }
+function headers(key) { return { ...supabaseApiHeaders(key), 'Content-Type':'application/json' }; }
 function repetirFalhaDeConexao(transportar) {
  return async (input, init={}) => {
   let ultimo;
