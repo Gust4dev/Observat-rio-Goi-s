@@ -57,6 +57,15 @@ describe("registro HTTP", () => {
     expect((await replay.json()).protocolo).toBe(primeiro.protocolo);
     falha = "registrar_ocorrencia"; const r = await registrar(request({ ...entrada, token_hash: "b".repeat(64) })); expect(r.status).toBe(409); expect(JSON.stringify(await r.json())).not.toContain(dados.out_protocolo);
   });
+  it("mantém a mesma chave de idempotência em registros concorrentes", async () => {
+    const respostas = await Promise.all([registrar(request()), registrar(request())]);
+    expect(respostas.map(r => r.status)).toEqual([201, 201]);
+    const protocolos = await Promise.all(respostas.map(async r => (await r.json()).protocolo));
+    expect(protocolos).toEqual([dados.out_protocolo, dados.out_protocolo]);
+    const gravacoes = chamadas.filter(c => c.url.endsWith("registrar_ocorrencia"));
+    expect(gravacoes).toHaveLength(2);
+    expect(gravacoes.map(c => c.body.p_chave_idempotencia)).toEqual([entrada.chave_idempotencia, entrada.chave_idempotencia]);
+  });
   it.each(["municipio", "categoria"])("recusa campo obrigatório ausente: %s", async campo => {
     const corpo: Record<string, unknown> = { ...entrada }; delete corpo[campo];
     expect((await registrar(request(corpo))).status).toBe(422); expect(chamadas).toHaveLength(0);
@@ -103,6 +112,40 @@ describe("registro HTTP", () => {
   it("recusa JSON, tipo e corpo gigante sem rede", async () => {
     expect((await registrar(request("{"))).status).toBe(400); expect((await registrar(request(entrada, { "content-type": "text/plain" }))).status).toBe(400);
     expect((await registrar(request("x".repeat(30000)))).status).toBe(413); expect((await registrar(request(entrada, { "content-length": "9999999" }))).status).toBe(413); expect(chamadas).toHaveLength(0);
+  });
+  it("rejeita UTF-8 inválido antes de qualquer consulta ou RPC", async () => {
+    const corpo = new Uint8Array([0x7b, 0x22, 0x78, 0x22, 0x3a, 0x22, 0xc3, 0x28, 0x22, 0x7d]);
+    const req = new Request("https://localhost/api/registrar", { method: "POST", headers: { origin: "https://localhost", "content-type": "application/json" }, body: corpo });
+    expect((await registrar(req)).status).toBe(400);
+    expect(chamadas).toHaveLength(0);
+  });
+  it("exige Origin e bloqueia Sec-Fetch-Site cross-site sem chamar serviços", async () => {
+    const semOrigem = request(); semOrigem.headers.delete("origin");
+    expect((await registrar(semOrigem)).status).toBe(403);
+    expect((await registrar(request(entrada, { "sec-fetch-site": "cross-site" }))).status).toBe(403);
+    expect(chamadas).toHaveLength(0);
+  });
+  it("falha fechado se o verificador Turnstile ou rate limit ficar indisponível", async () => {
+    const fetchOriginal = globalThis.fetch;
+    vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).includes("siteverify")) throw new DOMException("turnstile token secreto", "TimeoutError");
+      return fetchOriginal(input, init);
+    });
+    expect((await registrar(request())).status).toBe(503);
+    expect(chamadas.some(c => c.url.endsWith("registrar_ocorrencia"))).toBe(false);
+
+    vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).endsWith("consumir_limite")) return Response.json({ message: "segredo privado" }, { status: 503 });
+      return fetchOriginal(input, init);
+    });
+    expect((await registrar(request())).status).toBe(503);
+    expect(chamadas.some(c => c.url.endsWith("registrar_ocorrencia"))).toBe(false);
+  });
+  it("rejeita campos textuais acima do limite antes da rede", async () => {
+    expect((await registrar(request({ ...entrada, titulo: "x".repeat(121) }))).status).toBe(422);
+    expect((await registrar(request({ ...entrada, descricao: "x".repeat(4001) }))).status).toBe(422);
+    expect((await registrar(request({ ...entrada, turnstile: "x".repeat(2049) }))).status).toBe(422);
+    expect(chamadas).toHaveLength(0);
   });
   it("recusa campos desconhecidos, Unicode inválido e slugs hostis", async () => { for (const body of [{ ...entrada, moderacao: "publicado" }, { ...entrada, descricao: entrada.descricao + "\u202e" }, { ...entrada, municipio: "x,or(id.gt.0)" }]) expect((await registrar(request(body))).status).toBe(422); expect(chamadas).toHaveLength(0); });
   it("ignora XFF forjado fora da Vercel e valida IP quando confia na plataforma", async () => {
@@ -194,5 +237,7 @@ describe("acompanhamento e exclusão", () => {
     expect((await excluir(request({ token, confirmacao: true }, { origin: "null" }, "excluir"))).status).toBe(403);
     limite = false; expect((await acompanhar(request({ token }, {}, "acompanhar"))).status).toBe(429);
     const r = new Request(`https://localhost/api/acompanhar?token=${token}`, { method: "POST", headers: { origin: "https://localhost", "content-type": "application/json" }, body: JSON.stringify({ token }) }); expect((await acompanhar(r)).status).toBe(404);
+    const e = new Request(`https://localhost/api/excluir?token=${token}`, { method: "POST", headers: { origin: "https://localhost", "content-type": "application/json" }, body: JSON.stringify({ token, confirmacao: true }) }); expect((await excluir(e)).status).toBe(404);
+    expect(chamadas.some(c => c.url.endsWith("acompanhar_por_token") || c.url.endsWith("solicitar_exclusao_por_token"))).toBe(false);
   });
 });

@@ -1,4 +1,6 @@
 export function AvisoAmbiente() {
+  if (process.env.VERCEL_ENV === "production") return null;
+
   return (
     <div
       role="status"

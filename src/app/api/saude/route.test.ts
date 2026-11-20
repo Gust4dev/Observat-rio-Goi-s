@@ -4,6 +4,8 @@ beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+  vi.stubEnv("VERCEL_ENV", "");
+  vi.stubEnv("SUPABASE_PRODUCTION_PROJECT_REF", "");
   vi.spyOn(console, "info").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -24,7 +26,7 @@ it("informa configuração ausente sem consultar rede nem expor variáveis", asy
   const { GET } = await import("./route");
   const response = await GET(request());
   expect(response.status).toBe(503);
-  expect(await response.json()).toEqual({ aplicacao: "ok", banco: "nao_configurado" });
+  expect(await response.json()).toEqual({ aplicacao: "ok", banco: "nao_configurado", origem_confirmada: false });
   expect(fetch).not.toHaveBeenCalled();
 });
 
@@ -56,12 +58,44 @@ it("consulta recurso público com a publishable key somente em apikey", async ()
   const { GET } = await import("./route");
   const response = await GET(request());
   expect(response.status).toBe(200);
-  expect(await response.json()).toEqual({ aplicacao: "ok", banco: "ok" });
+  expect(await response.json()).toEqual({ aplicacao: "ok", banco: "ok", origem_confirmada: false });
   expect(target).toBe("https://public.supabase.co/rest/v1/municipios?select=slug&limit=1");
   expect(sent).toMatchObject({ method: "HEAD", cache: "no-store", redirect: "error", headers: { apikey: "sb_publishable_test" } });
   expect(new Headers(sent?.headers).has("authorization")).toBe(false);
   expect(sent?.signal).toBeInstanceOf(AbortSignal);
   expect(JSON.stringify(sent)).not.toContain("sb_secret_not_public");
+});
+
+it.each(["", "rocebqrdbvrucxyzbien"])("não consulta banco em Production sem ref correspondente (%s)", async (ref) => {
+  vi.stubEnv("VERCEL_ENV", "production");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://hvekgzxuciyewtybwads.supabase.co");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test");
+  vi.stubEnv("SUPABASE_PRODUCTION_PROJECT_REF", ref);
+  const fetch = vi.fn(() => { throw new Error("não deve consultar rede"); });
+  vi.stubGlobal("fetch", fetch);
+
+  const { GET } = await import("./route");
+  const response = await GET(request());
+
+  expect(response.status).toBe(503);
+  expect(await response.json()).toEqual({ aplicacao: "ok", banco: "nao_configurado", origem_confirmada: false });
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("confirma somente a correspondência de ref em Production sem aprovar leituras públicas", async () => {
+  vi.stubEnv("VERCEL_ENV", "production");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://hvekgzxuciyewtybwads.supabase.co");
+  vi.stubEnv("SUPABASE_PRODUCTION_PROJECT_REF", "hvekgzxuciyewtybwads");
+  vi.stubEnv("SUPABASE_PRODUCTION_DATA_APPROVED", "false");
+  const fetch = vi.fn(() => { throw new Error("leituras devem continuar fechadas"); });
+  vi.stubGlobal("fetch", fetch);
+
+  const { GET } = await import("./route");
+  const response = await GET(request());
+
+  expect(response.status).toBe(503);
+  expect(await response.json()).toEqual({ aplicacao: "ok", banco: "nao_configurado", origem_confirmada: true });
+  expect(fetch).not.toHaveBeenCalled();
 });
 
 it("mantém o fallback Bearer de uma chave anon JWT legada", async () => {
@@ -83,7 +117,7 @@ it("trata URL inválida como indisponibilidade sem revelar configuração", asyn
   const { GET } = await import("./route");
   const response = await GET(request());
   expect(response.status).toBe(503);
-  expect(await response.json()).toEqual({ aplicacao: "ok", banco: "indisponivel" });
+  expect(await response.json()).toEqual({ aplicacao: "ok", banco: "indisponivel", origem_confirmada: false });
   expect(vi.mocked(console.info).mock.calls.flat().join("")).not.toContain("secret");
 });
 
@@ -97,6 +131,6 @@ it.each(["rede", "http"])("retorna falha genérica quando banco falha por %s", a
   const { GET } = await import("./route");
   const response = await GET(request());
   expect(response.status).toBe(503);
-  expect(await response.json()).toEqual({ aplicacao: "ok", banco: "indisponivel" });
+  expect(await response.json()).toEqual({ aplicacao: "ok", banco: "indisponivel", origem_confirmada: false });
   expect(vi.mocked(console.info).mock.calls.flat().join("")).not.toMatch(/secret|example|senha/);
 });

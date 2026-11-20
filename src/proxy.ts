@@ -20,6 +20,12 @@ function responder(status: number, headers: Record<string, string> = {}) {
   });
 }
 
+function prosseguir() {
+  const res = NextResponse.next();
+  res.headers.set("X-Robots-Tag", NOINDEX);
+  return res;
+}
+
 function credenciaisDe(request: NextRequest): [string, string] | null {
   const auth = request.headers.get("authorization");
   if (!auth || !auth.toLowerCase().startsWith("basic ")) return null;
@@ -37,16 +43,15 @@ function credenciaisDe(request: NextRequest): [string, string] | null {
 
 export function proxy(request: NextRequest) {
   // Vercel Cron sends Bearer CRON_SECRET; this exact handler verifies it itself.
-  if (request.nextUrl.pathname === "/api/cron/limpar-quarentena") return NextResponse.next();
+  if (request.nextUrl.pathname === "/api/cron/limpar-quarentena") return prosseguir();
+  // A proteção global é exclusiva do Preview; as rotas mantêm seus próprios gates.
+  if (process.env.VERCEL_ENV !== "preview") return prosseguir();
   const usuario = process.env.ACESSO_STAGING_USUARIO;
   const senha = process.env.ACESSO_STAGING_SENHA;
 
   if (!usuario || !senha) {
-    // Falha fechada: em produção sem credenciais configuradas, nada é servido.
-    if (process.env.NODE_ENV === "production") return responder(503);
-    const res = NextResponse.next();
-    res.headers.set("X-Robots-Tag", NOINDEX);
-    return res;
+    // Preview sem credenciais configuradas falha fechado.
+    return responder(503);
   }
 
   const dadas = credenciaisDe(request);
@@ -59,9 +64,7 @@ export function proxy(request: NextRequest) {
     });
   }
 
-  const res = NextResponse.next();
-  res.headers.set("X-Robots-Tag", NOINDEX);
-  return res;
+  return prosseguir();
 }
 
 export const config = {

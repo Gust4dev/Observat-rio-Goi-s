@@ -63,3 +63,6 @@ docs/superpowers/
 .cursor/
 .gemini/
 .opencode/
+
+.vercel
+.env*

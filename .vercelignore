@@ -1,0 +1,14 @@
+.env*
+**/.env*
+.gitignore
+.github/
+AGENTS.md
+README.md
+docs/
+db/
+scripts/
+vitest.config.mts
+**/*.test.*
+**/*.spec.*
+**/__tests__/
+**/tests/

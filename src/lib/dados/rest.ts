@@ -1,6 +1,7 @@
 import "server-only";
 import type { ZodType } from "zod";
 import { resolveSupabaseKeys, supabaseApiHeaders } from "../supabase-keys.mjs";
+import { publicSupabaseOriginAllowed } from "../supabase-origin";
 
 // Cliente fetch fino ao PostgREST do Supabase (somente SELECT nas views públicas e tabelas de referência).
 // Sem supabase-js (M2-2). Sempre `select` com lista explícita; query montada com URLSearchParams.
@@ -76,6 +77,13 @@ function config(): { base: string; chave: string } {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const { publicKey: chave } = resolveSupabaseKeys(process.env);
   if (!url) throw new Error("Variável de ambiente ausente: NEXT_PUBLIC_SUPABASE_URL");
+  if (!publicSupabaseOriginAllowed(
+    url,
+    process.env.SUPABASE_PRODUCTION_PROJECT_REF,
+    process.env.SUPABASE_PRODUCTION_DATA_APPROVED,
+  )) {
+    throw new ErroRest("origem dos dados públicos não confirmada", "origem");
+  }
   if (!chave) throw new Error("Variável de ambiente ausente: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
   return { base: url.replace(/\/+$/, ""), chave };
 }

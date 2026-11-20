@@ -1,8 +1,14 @@
 import { criarLoggerRequisicao, type EstadoBanco } from "@/lib/observabilidade/logger";
 import { resolveSupabaseKeys, supabaseApiHeaders } from "@/lib/supabase-keys.mjs";
+import { publicSupabaseOriginAllowed, supabaseProjectRef } from "@/lib/supabase-origin";
 
 async function verificarBanco(): Promise<EstadoBanco> {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!publicSupabaseOriginAllowed(
+    base,
+    process.env.SUPABASE_PRODUCTION_PROJECT_REF,
+    process.env.SUPABASE_PRODUCTION_DATA_APPROVED,
+  )) return "nao_configurado";
   const { publicKey: chave } = resolveSupabaseKeys(process.env);
   if (!base || !chave) return "nao_configurado";
 
@@ -25,10 +31,14 @@ async function verificarBanco(): Promise<EstadoBanco> {
 export async function GET(request: Request): Promise<Response> {
   const inicio = performance.now();
   const logger = criarLoggerRequisicao(request);
+  const refConfigurada = supabaseProjectRef(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const origemConfirmada = Boolean(
+    refConfigurada && refConfigurada === process.env.SUPABASE_PRODUCTION_PROJECT_REF?.trim(),
+  );
   const banco = await verificarBanco();
   const status = banco === "ok" ? 200 : 503;
   logger.registrar("saude.verificada", { status, banco, duracaoMs: performance.now() - inicio });
-  return Response.json({ aplicacao: "ok", banco }, {
+  return Response.json({ aplicacao: "ok", banco, origem_confirmada: origemConfirmada }, {
     status,
     headers: {
       "Cache-Control": "no-store",
