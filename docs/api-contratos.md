@@ -44,18 +44,20 @@ Todas as ações administrativas exigem token válido e AAL2. Papel mínimo: mod
 
 | Método e rota | Query/corpo | Saída/validação |
 |---|---|---|
-| GET `/api/admin/fila`, `/api/admin/ocorrencias` | `limite` 1–100 padrão 50; `moderacao`, `situacao`, `municipio_id`, `categoria_id`; `idade_min_dias`, `idade_max_dias` inteiros 0–36500; `denuncia=true\|false`; `foto_pendente=true\|false`; `ordem=prioridade\|antigos\|recentes` padrão prioridade; `cursor` opaco | `{itens,total,proximo_cursor}`; prioridade ordena denúncias abertas e fotos pendentes antes da idade |
-| GET `/api/admin/ocorrencias/{id}` | UUID | Detalhe completo para moderação, atualizações, denúncia/histórico; sem contato privado e sem caminho/URL interna |
-| POST `/api/admin/ocorrencias/{id}/moderar` | `{acao,motivo?,motivo_codigo?}`; `aprovar\|reter\|remover\|restaurar`; motivo até 1000; códigos fechados `dados_pessoais\|conteudo_ofensivo\|fora_escopo\|spam\|duplicidade\|outro` | `{ok:true}`; remoção exige código e motivo |
-| POST `/api/admin/ocorrencias/lote` | `{ids:[UUID...],acao:"aprovar"\|"reter",motivo?}`; 1–50 IDs sem repetição; retenção exige motivo | Resultado por item, transação única |
-| POST `/api/admin/ocorrencias/{id}/situacao` | `{situacao,texto,evidencia?,publica?}`; texto/evidência até 4000 | `{ok:true}`; `resolvido` exige evidência |
+| GET `/api/admin/fila`, `/api/admin/ocorrencias` | `limite` 1–100 padrão 50; `moderacao`, `situacao`, `municipio_id`, `categoria_id`; `idade_min_dias`, `idade_max_dias` inteiros 0–36500; `denuncia=true\|false`; `foto_pendente=true\|false`; `ordem=antigos\|recentes` padrão antigos; `cursor` opaco e assinado | `{itens,proximo_cursor}`; ordenação estável por `criado_em,id`; sem contagem na consulta de página |
+| GET `/api/admin/fila?resumo=true` | Sem outros filtros | `{calculado_em,com_denuncias,com_fotos_pendentes}`; resumo exato separado da navegação e válido no instante indicado |
+| GET `/api/admin/ocorrencias/{id}` | UUID | `{ocorrencia,imagens,resumos}`; imagens limitadas a três; sem contato, origem de deduplicação, conteúdo privado ou caminho/URL de Storage |
+| GET `/api/admin/ocorrencias/{id}?colecao=denuncias\|respostas\|atualizacoes` | `limite` 1–100 padrão 50; `cursor` opaco e assinado; atualizações retornam somente públicas | `{itens,proximo_cursor}`; chave estável por `criado_em,id`; resposta sem contato |
+| POST `/api/admin/ocorrencias/{id}/moderar` | `{acao,versao_esperada,motivo?,motivo_codigo?}`; `aprovar\|reter\|remover\|restaurar`; motivo até 1000; códigos fechados `dados_pessoais\|conteudo_ofensivo\|fora_escopo\|spam\|duplicidade\|outro` | `{ok:true}`; remoção exige código e motivo |
+| POST `/api/admin/ocorrencias/lote` | `{ids:[UUID...],versoes_esperadas:[...],acao:"aprovar"\|"reter",motivo?}`; 1–50 IDs únicos e versões na mesma ordem; retenção exige motivo | Resultado por item, transação única |
+| POST `/api/admin/ocorrencias/{id}/situacao` | `{situacao,texto,evidencia?,publica?,versao_esperada}`; texto/evidência até 4000 | `{ok:true}`; `resolvido` exige evidência |
 | POST `/api/admin/ocorrencias/{id}/atualizacoes` | `{situacao?,texto,evidencia?,publica?,tipo}`; tipo `providencia\|evidencia\|resposta_oficial\|nota` | `{ok:true}`; notas privadas não aparecem publicamente |
-| POST `/api/admin/ocorrencias/{id}/mesclar` | `{destino:UUID,motivo}`; origem diferente do destino | `{ok:true}`; auditoria e origem marcada como duplicata |
+| POST `/api/admin/ocorrencias/{id}/mesclar` | `{destino:UUID,motivo,versao_esperada,versao_destino_esperada}`; origem diferente do destino | `{ok:true}`; auditoria e origem marcada como duplicata |
 | GET `/api/admin/ocorrencias/{id}/contato` | UUID; gestor+ | Contato, se houver; cada leitura é auditada |
-| GET `/api/admin/denuncias` | `limite` 1–100, `offset` 0–100000, `ocorrencia_id`, `status=aberta\|em_analise\|procedente\|improcedente` | Lista de denúncias paginada |
-| POST `/api/admin/denuncias/{id}/resolver` | `{status:"em_analise"\|"procedente"\|"improcedente"}` | `{ok:true}` |
-| GET `/api/admin/respostas` | `limite`, `offset`, `ocorrencia_id`, `status=pendente\|publicada\|rejeitada` | Lista paginada sem contato privado |
-| POST `/api/admin/respostas/{id}/revisar` | `{acao:"publicar"\|"rejeitar",motivo?}`; rejeitar requer motivo | `{ok:true}` |
+| GET `/api/admin/denuncias` | `limite` 1–100, `cursor`, `ocorrencia_id`, `status=aberta\|em_analise\|procedente\|improcedente`, `id` exato opcional | `{itens,proximo_cursor}` sem contato |
+| POST `/api/admin/denuncias/{id}/resolver` | `{status:"em_analise"\|"procedente"\|"improcedente",versao_esperada}` | `{ok:true}` |
+| GET `/api/admin/respostas` | `limite` 1–100, `cursor`, `ocorrencia_id`, `status=pendente\|publicada\|rejeitada`, `id` exato opcional | `{itens,proximo_cursor}` sem contato privado |
+| POST `/api/admin/respostas/{id}/revisar` | `{acao:"publicar"\|"rejeitar",versao_esperada,motivo?}`; rejeitar requer motivo | `{ok:true}` |
 | GET `/api/admin/fotos/{id}/revisao` | UUID | `{url,expira_em_segundos:60}`; URL privada assinada, não publicar nem persistir |
 | POST `/api/admin/imagem` | Ação M4, id da imagem e dados de decisão/checklist conforme esquema do handler | Confirmação de aprovação/remoção; lease e auditoria de banco |
 | GET `/api/admin/auditoria` | `ocorrencia_id`, `admin_id`, `acao` (snake_case até 80), `desde`, `ate`, `limite` 1–100, `offset` 0–100000 | Eventos de auditoria filtrados; desde ≤ até |
@@ -65,3 +67,7 @@ Todas as ações administrativas exigem token válido e AAL2. Papel mínimo: mod
 | POST `/api/admin/equipe/{id}/desativar` | UUID | `{ok:true}`; não desativa último superadmin |
 
 Tipos exportáveis incluem queries da fila, denúncias, respostas e auditoria; tipos de estado de saúde, equipe e respostas públicas; esquemas de escrita pública, login, moderação e lote. `src/lib/contratos/sincronizacao.test.ts` mantém a correspondência exata entre verbos/métodos registrados e exports dos Route Handlers. Atualizações de campos de um endpoint devem atualizar este documento e os schemas correspondentes.
+
+Cursores da fila e das coleções são assinados pelo servidor e vinculados a filtros, coleção, ocorrência, direção e instante de referência. Novas denúncias e decisões podem mudar a elegibilidade durante uma navegação; as páginas seguintes continuam o percurso iniciado. `Atualizar` reinicia a janela e solicita o resumo datado novamente. Ausência na página atual não significa ausência de pendências fora dela.
+
+Toda decisão substitutiva exige `versao_esperada` lida do item selecionado. O servidor verifica a versão sob lock dentro da RPC e retorna HTTP `409` (`estado_desatualizado`) se outro moderador alterou o estado; não grava a segunda decisão nem sua auditoria. O cliente recarrega o item e exige confirmação explícita antes de reenviar. Migração 025 remove o acesso autenticado às assinaturas antigas sem precondição.

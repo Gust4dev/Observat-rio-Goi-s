@@ -12,8 +12,8 @@ function network(role = "moderador", result: unknown = null, aal = "aal2") {
 beforeEach(() => { vi.stubEnv("LIMITE_ADMIN_MAXIMO", "60"); vi.stubEnv("LIMITE_ADMIN_JANELA_SEGUNDOS", "60"); vi.stubEnv("HMAC_SEGREDO", "h".repeat(32)); vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://db.example"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test"); vi.stubEnv("SUPABASE_SECRET_KEY", "sb_secret_service"); vi.spyOn(console,"info").mockImplementation(() => {}); vi.spyOn(console,"error").mockImplementation(() => {}); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 it("uses the verified user JWT for atomic moderation and private headers", async () => {
- const { f, request } = network(); const r = await handleAdmin(request({ acao: "remover", motivo_codigo: "spam", motivo: "Confirmado" }), "moderar", id);
- expect(r.status).toBe(200); expect(f.mock.calls[2][0]).toContain("rpc/admin_moderar_ocorrencia"); expect(f.mock.calls[2][1].headers.Authorization).toBe(`Bearer ${token()}`); expect(JSON.parse(f.mock.calls[2][1].body)).toEqual({ p_id: id, p_acao: "remover", p_motivo_codigo: "spam", p_motivo: "Confirmado" });
+ const { f, request } = network(); const r = await handleAdmin(request({ acao: "remover", motivo_codigo: "spam", motivo: "Confirmado", versao_esperada: 1 }), "moderar", id);
+ expect(r.status).toBe(200); expect(f.mock.calls[2][0]).toContain("rpc/admin_moderar_ocorrencia"); expect(f.mock.calls[2][1].headers.Authorization).toBe(`Bearer ${token()}`); expect(JSON.parse(f.mock.calls[2][1].body)).toEqual({ p_id: id, p_acao: "remover", p_motivo_codigo: "spam", p_motivo: "Confirmado", p_versao_esperada: 1 });
  expect(r.headers.get("cache-control")).toBe("no-store"); expect(r.headers.get("x-request-id")).toBeTruthy(); expect(r.headers.get("referrer-policy")).toBe("no-referrer");
 });
 it.each(["fila", "detalhe", "contato", "moderar", "lote", "mesclar", "situacao", "atualizacao", "denuncias", "respostas", "resolver-denuncia", "revisar-resposta", "auditoria", "foto", "equipe", "equipe-convidar", "equipe-papel", "equipe-desativar"])("rejects unauthenticated %s", async action => {
@@ -52,14 +52,88 @@ it("generates an invite capability only for superadmin and associates via caller
  const n=network("superadmin"); n.f.mockReset().mockResolvedValueOnce(Response.json({id})).mockResolvedValueOnce(Response.json([{user_id:id,papel:"superadmin",ativo:true}])).mockResolvedValueOnce(Response.json({},{status:429})).mockResolvedValueOnce(Response.json({user:{id},properties:{action_link:"https://db.example/auth/v1/verify?token=one-time-secret&type=invite"}})).mockResolvedValueOnce(new Response(null,{status:204}));
  const r=await handleAdmin(n.request({email:"new@example.com",papel:"moderador",motivo:"Nova equipe"}),"equipe-convidar");expect(r.status).toBe(200);expect((await r.json()).link_convite).toContain("one-time-secret");expect(n.f.mock.calls[2][0]).toContain("/auth/v1/invite");expect(n.f.mock.calls[3][1].headers.apikey).toBe("sb_secret_service");expect(n.f.mock.calls[3][1].headers.Authorization).toBeUndefined();expect(n.f.mock.calls[4][1].headers.Authorization).toBe(`Bearer ${token()}`);expect(JSON.parse(String(n.f.mock.calls[4][1].body)).p_user_id).toBe(id);expect(JSON.stringify(vi.mocked(console.info).mock.calls)).not.toContain("one-time-secret");expect(JSON.stringify(vi.mocked(console.info).mock.calls)).not.toContain("sb_secret_service");
 });
-it("lists the queue using filters and stable order without public sources",async()=>{
- const n=network(); n.f.mockResolvedValueOnce(Response.json([{id,criado_em:"2026-10-28T12:00:00Z",denuncias_abertas:2,imagens_pendentes:1}])).mockResolvedValueOnce(Response.json([{id}],{headers:{"content-range":"0-0/10"}})); const request=new Request("https://app.example/api/admin/fila?moderacao=pendente&ordem=recentes&limite=1",{headers:{Authorization:`Bearer ${token()}`}});
- const r=await handleAdmin(request,"fila");expect(r.status).toBe(200);expect((await r.json()).total).toBe(10);const url=new URL(n.f.mock.calls[2][0]);expect(url.pathname).toBe("/rest/v1/v_fila_moderacao");expect(url.searchParams.get("moderacao")).toBe("eq.pendente");expect(url.searchParams.get("order")).toBe("criado_em.desc,id.desc");expect(url.searchParams.get("limit")).toBe("2");
+function consulta(path: string) {
+ return new Request("https://app.example/api/admin/" + path, { headers: { Authorization: `Bearer ${token()}` } });
+}
+const filaItem = { id, criado_em: "2026-10-28T12:00:00.123456Z", denuncias_abertas: 2, imagens_pendentes: 1 };
+it("uses one bounded queue query without requesting a count", async () => {
+ const n = network("moderador", [filaItem]);
+ const res = await handleAdmin(consulta("fila?moderacao=pendente&ordem=recentes&limite=1"), "fila");
+ expect(res.status).toBe(200);
+ expect(await res.json()).toEqual({ itens: [filaItem], proximo_cursor: null });
+ expect(n.f).toHaveBeenCalledTimes(3);
+ const [url, init] = n.f.mock.calls[2];
+ expect(new URL(url).pathname).toBe("/rest/v1/rpc/admin_pagina_fila");
+ expect(new Headers(init.headers).has("Prefer")).toBe(false);
+ expect(JSON.parse(init.body)).toMatchObject({ p_limite: 1, p_ordem: "recentes", p_moderacao: "pendente" });
 });
-it("keeps full filtered count outside priority cursor and applies age/photo/report filters",async()=>{
- const c={id,criado_em:"2026-10-28T12:00:00Z",denuncias_abertas:2,imagens_pendentes:1};const n=network();n.f.mockResolvedValueOnce(Response.json([c])).mockResolvedValueOnce(Response.json([{id}],{headers:{"content-range":"0-0/20"}}));
- const url=new URL("https://app.example/api/admin/fila");url.search=new URLSearchParams({cursor:Buffer.from(JSON.stringify(c)).toString("base64url"),denuncia:"true",foto_pendente:"false",idade_min_dias:"1",idade_max_dias:"30",municipio_id:"2",categoria_id:"3"}).toString();
- const r=await handleAdmin(new Request(url,{headers:{Authorization:`Bearer ${token()}`}}),"fila");expect(r.status).toBe(200);expect((await r.json()).total).toBe(20);const page=new URL(n.f.mock.calls[2][0]);const count=new URL(n.f.mock.calls[3][0]);expect(page.searchParams.get("or")).toContain("denuncias_abertas.lt.2");expect(count.searchParams.has("or")).toBe(false);expect(count.searchParams.get("denuncias_abertas")).toBe("gt.0");expect(count.searchParams.get("imagens_pendentes")).toBe("eq.0");expect(count.searchParams.getAll("criado_em")).toHaveLength(2);expect(page.searchParams.get("order")).toBe("denuncias_abertas.desc,imagens_pendentes.desc,criado_em.asc,id.asc");
+it("binds the queue cursor to the original filters and date reference", async () => {
+ const filtros = "limite=1&denuncia=true&foto_pendente=false&idade_min_dias=1&idade_max_dias=30";
+ const primeira = network("moderador", [filaItem, { ...filaItem, id: "12345678-1234-4234-8234-123456789013" }]);
+ const res = await handleAdmin(consulta("fila?" + filtros), "fila");
+ expect(res.status).toBe(200);
+ const page = await res.json();
+ expect(page.itens).toEqual([filaItem]);
+ const cursor = "&cursor=" + encodeURIComponent(page.proximo_cursor);
+ const segunda = network("moderador", []);
+ expect((await handleAdmin(consulta("fila?" + filtros + cursor), "fila")).status).toBe(200);
+ const a = JSON.parse(primeira.f.mock.calls[2][1].body);
+ const b = JSON.parse(segunda.f.mock.calls[2][1].body);
+ expect(b).toMatchObject({
+  p_referencia_em: a.p_referencia_em, p_criado_desde: a.p_criado_desde, p_criado_ate: a.p_criado_ate,
+  p_denuncia: true, p_foto_pendente: false, p_ordem: "antigos",
+  p_cursor_criado_em: filaItem.criado_em, p_cursor_id: id,
+ });
+ for (const invalid of [filtros.replace("denuncia=true", "denuncia=false") + cursor, filtros + cursor + "x"]) {
+  const n = network();
+  expect((await handleAdmin(consulta("fila?" + invalid), "fila")).status).toBe(400);
+  expect(n.f).toHaveBeenCalledTimes(2);
+ }
+});
+it("fetches the timestamped urgency summary independently", async () => {
+ const summary = { calculado_em: filaItem.criado_em, com_denuncias: 2, com_fotos_pendentes: 1 };
+ const n = network("moderador", summary);
+ const res = await handleAdmin(consulta("fila?resumo=true"), "fila");
+ expect(await res.json()).toEqual(summary);
+ expect(n.f).toHaveBeenCalledTimes(3);
+ expect(n.f.mock.calls[2][0]).toContain("/rpc/admin_resumo_fila");
+});
+it("paginates occurrence children and rejects a cursor for another collection", async () => {
+ const resposta = { id: "9007199254740993", criado_em: filaItem.criado_em, texto: "Texto do registro", contato: "privado" };
+ const n = network("moderador", [resposta, { ...resposta, id: "9007199254740994" }]);
+ const path = "ocorrencias/" + id + "?limite=1&colecao=";
+ const res = await handleAdmin(consulta(path + "respostas"), "detalhe", id);
+ expect(res.status).toBe(200);
+ const page = await res.json();
+ expect(page.itens).toEqual([{ id: resposta.id, criado_em: resposta.criado_em, texto: resposta.texto }]);
+ const query = new URL(n.f.mock.calls[2][0]).searchParams;
+ expect(query.get("ocorrencia_id")).toBe("eq." + id);
+ expect(query.get("limit")).toBe("2");
+ expect(query.get("order")).toBe("criado_em.asc,id.asc");
+ expect(query.get("select")).not.toContain("contato");
+ const cursor = "&cursor=" + encodeURIComponent(page.proximo_cursor);
+ const segunda = network("moderador", []);
+ expect((await handleAdmin(consulta(path + "respostas" + cursor), "detalhe", id)).status).toBe(200);
+ expect(new URL(segunda.f.mock.calls[2][0]).searchParams.get("or")).toContain("id.gt.9007199254740993");
+ const terceira = network();
+ expect((await handleAdmin(consulta(path + "denuncias" + cursor), "detalhe", id)).status).toBe(400);
+ expect(terceira.f).toHaveBeenCalledTimes(2);
+});
+it("rejects a stale write with the contractual conflict and keeps the reason in the RPC request", async () => {
+ const n = network();
+ n.f.mockResolvedValueOnce(Response.json({ code: "PT409" }, { status: 409 }));
+ const r = await handleAdmin(n.request({ acao: "reter", motivo: "Motivo digitado", versao_esperada: 1 }), "moderar", id);
+ expect(r.status).toBe(409);
+ expect(await r.json()).toMatchObject({ erro: { codigo: "estado_desatualizado" } });
+ expect(JSON.parse(n.f.mock.calls[2][1].body)).toMatchObject({ p_motivo: "Motivo digitado", p_versao_esperada: 1 });
+});
+it("reloads one selected report by its exact bigint identifier", async () => {
+ const item = { id: "9007199254740993", criado_em: filaItem.criado_em, versao_admin: 5 };
+ const n = network("moderador", [item]);
+ const r = await handleAdmin(consulta("denuncias?id=" + item.id), "denuncias");
+ expect(r.status).toBe(200);
+ expect(await r.json()).toEqual({ itens: [item], proximo_cursor: null });
+ expect(new URL(n.f.mock.calls[2][0]).searchParams.get("id")).toBe("eq." + item.id);
 });
 it("sends SMTP invite without returning a capability when delivery works",async()=>{
  const n=network("superadmin");n.f.mockResolvedValueOnce(Response.json({id})).mockResolvedValueOnce(new Response(null,{status:204}));const r=await handleAdmin(n.request({email:"new@example.com",papel:"gestor",motivo:"Equipe"}),"equipe-convidar");expect(r.status).toBe(200);expect(await r.json()).toEqual({user_id:id,convite_enviado:true});expect(n.f.mock.calls).toHaveLength(4);
