@@ -60,6 +60,6 @@ Consumir `{itens,proximo_cursor}` na fila; não ler `total`. Usar `GET /api/admi
 
 O detalhe retorna `{ocorrencia,imagens,resumos}`; as imagens têm teto de três e não incluem caminho. Paginar `denuncias`, `respostas` e `atualizacoes` públicas pela query `colecao`, `limite` e `cursor` no endpoint do detalhe. Decisões devem enviar `versao_esperada` obtida no item selecionado; HTTP `409 estado_desatualizado` exige recarga e confirmação manual. Não reenviar automaticamente nem apagar o motivo digitado.
 
-O schema principal e os testes remotos transacionais estão verificados. A revisão de handler compatível ainda precisa ser publicada pelo agente de deploy; não houve deploy nesta tarefa. A prova de interleaving real e o teste de carga ficam como validações futuras de capacidade, sem bloquear a primeira beta.
+O schema principal e os testes remotos transacionais estão verificados. Após o push do commit `8e6d73d`, a Vercel iniciou automaticamente o deployment Production `dpl_6zbah4sN9r1LqkboSF5pP1P75qBg`; `vercel inspect` confirmou `READY` (24,2 s até pronto) em 2026-11-20: https://observatorio-akjmkplrb-mercurygestoria-9113s-projects.vercel.app. Não houve deploy manual. A prova de interleaving real e o teste de carga ficam como validações futuras de capacidade, sem bloquear a primeira beta.
 
 ADMIN_QUEUE_READY=YES
