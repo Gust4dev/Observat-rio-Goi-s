@@ -66,4 +66,12 @@ Para o primeiro operador, usar uma identidade institucional confirmada. Após a 
 - A CI revelou que o teste do proxy do cron dependia do `VERCEL_ENV` do runner e que o build fictício era interpretado como Production. O teste agora fixa Preview, e o build da fixture declara `VERCEL_ENV=development`; a fixture local confirmou build e scanner sem consultar banco real. A CI completa deste commit aguarda conclusão após esta atualização do workflow.
 - **GO ainda pendente:** `TURNSTILE_SECRET` e `NEXT_PUBLIC_TURNSTILE_SITE_KEY` não estão configurados; `BETA_REGISTRO_TEXTUAL_ATIVA` continua `false`. Portanto a página pública e a fila autenticada operam, mas a submissão de relatos permanece fechada. Não usei chave Turnstile de teste nem desliguei o controle antifraude.
 
+## Fechamento de CI e estado atual do runtime — 2026-11-21
+
+- O commit `3cb0f961c91310ba0c7a4de145e3644d6aca1532` está em `main` e `origin/main`. A CI `44882024057` concluiu `success`: install, typecheck, lint, testes unitários, PGlite, build da fixture dummy e scanner do bundle público passaram.
+- A Vercel publicou automaticamente o commit em Production. Deployment `dpl_J3Ku2Cry6Raf5FmpWcQdzysxSPs1`, estado READY, URL `https://observatorio-nwjyw27h9-mercurygestoria-9113s-projects.vercel.app`, alias `https://observatorio-go.vercel.app`.
+- GET atual no alias: `/` 200, `/api/saude` 200 (`aplicacao=ok`, `banco=ok`, `origem_confirmada=true`) e `/api/dados` 200 (`dados=[]`, `total_linhas=0`). `/api/registrar` em GET retorna 405, método não permitido.
+- O inventário Vercel Production continua sem `TURNSTILE_SECRET` e `NEXT_PUBLIC_TURNSTILE_SITE_KEY`; `BETA_REGISTRO_TEXTUAL_ATIVA` permanece desativada. Nenhum POST de cadastro foi enviado. A fila e o fluxo real de login/MFA AAL2 continuam comprovados pela execução anterior; a escala da fila foi comprovada separadamente no Plano 16.
+- **Estado:** CI, deployment, origem Production, leitura pública e backend da fila estão comprovados. O aceite do Passo 1 continua pendente porque o formulário não aceita relatos sem proteção antiabuso configurada; não usei chaves universais de teste nem removi esse gate.
+
 Referências oficiais: [limites e cobrança Supabase](https://supabase.com/docs/guides/platform/billing-faq), [pausa de projetos Free](https://supabase.com/docs/guides/platform/free-project-pausing), [criar projeto pela Management API](https://supabase.com/docs/reference/api/v1-create-a-project), [atualizar Auth](https://supabase.com/docs/reference/api/v1-update-auth-service-config).
