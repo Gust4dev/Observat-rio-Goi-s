@@ -5,7 +5,7 @@ try { process.loadEnvFile(new URL('../.env.local', import.meta.url)); } catch { 
 
 function config() {
   const url = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '');
-  const { publicKey: anon, secretKey: service } = resolveSupabaseKeys();
+  const { publicKey: anon, secretKey: service } = resolveSupabaseKeys(process.env);
   const email = process.env.ADMIN_BOOTSTRAP_EMAIL?.trim().toLowerCase() ?? '';
   const password = process.env.ADMIN_BOOTSTRAP_PASSWORD ?? '';
   if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash || !anon || !service
@@ -21,7 +21,7 @@ async function api(c, path, { method = 'GET', body, token, admin = false, prefer
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const data = response.status === 204 ? null : await response.json().catch(() => null);
-  if (!response.ok) throw new Error(`Operação de provisionamento falhou (${response.status}).`);
+  if (!response.ok) throw new Error(`Operação de provisionamento falhou em ${method} ${path} (${response.status}).`);
   return data;
 }
 
@@ -56,8 +56,11 @@ async function main() {
 
   const login = await api(c, '/auth/v1/token?grant_type=password', { method: 'POST', body: { email: c.email, password: c.password } });
   if (typeof login?.access_token !== 'string') throw new Error('Login inicial falhou.');
-  const factors = await api(c, '/auth/v1/factors', { token: login.access_token });
-  const totps = Array.isArray(factors?.factors) ? factors.factors.filter((f) => f.factor_type === 'totp') : [];
+  // GoTrue exposes enrolled factors on the authenticated user resource. The
+  // `/factors` collection is enrollment-only and returns 405 for GET.
+  const identity = await api(c, '/auth/v1/user', { token: login.access_token });
+  const factors = identity?.factors;
+  const totps = Array.isArray(factors) ? factors.filter((f) => f.factor_type === 'totp') : [];
   if (totps.some((factor) => factor.status === 'verified')) {
     console.log('Superadministrador ativo; fator TOTP já verificado. Nenhuma semente foi exibida.');
     return;

@@ -97,21 +97,27 @@ export async function requireAdmin(req: Request, minimum: z.infer<typeof roleSch
 }
 async function throttle(req: Request, email: string) {
   const secret = process.env.HMAC_SEGREDO, service = resolveSupabaseKeys(process.env).secretKey;
-  if (!secret || Buffer.byteLength(secret) < 32 || !service) throw new Failure(503);
+  const bloquear = (motivo: string, status?: number) => console.error(JSON.stringify({ evento: "admin.login_rate_limit_blocked", motivo, ...(status === undefined ? {} : { status }) }));
+  if (!secret || Buffer.byteLength(secret) < 32 || !service) { bloquear("configuracao_indisponivel"); throw new Failure(503); }
   // The ingress must overwrite XFF; arbitrary public proxy headers are never trusted.
   let origin = "local-sem-endereco";
   if (process.env.VERCEL === "1") {
     const forwarded = req.headers.get("x-forwarded-for")?.trim();
-    if (!forwarded || !isIP(forwarded)) throw new Failure(503);
+    if (!forwarded || !isIP(forwarded)) { bloquear("ip_indisponivel"); throw new Failure(503); }
     origin = forwarded;
   } else if (process.env.NODE_ENV === "production" && !["localhost", "127.0.0.1", "[::1]"].includes(new URL(req.url).hostname)) throw new Failure(503);
   const keys = [["admin-login-origin-v1", origin], ["admin-login-email-v1", email.toLowerCase()]];
   const c = config();
   for (const key of keys) {
   const hash = createHmac("sha256", secret).update(JSON.stringify(key)).digest("hex");
-  const result = await fetch(c.base + "/rest/v1/rpc/consumir_limite", { method: "POST", cache: "no-store", signal: AbortSignal.timeout(10000), headers: { ...supabaseApiHeaders(service), "Content-Type": "application/json" }, body: JSON.stringify({ p_chave: `\\x${hash}`, p_janela: "900 seconds", p_maximo: 5 }) });
-  if (!result.ok) throw new Failure(503);
-  const allowed = z.boolean().parse(await result.json()); if (!allowed) throw new Failure(429);
+  let result: Response;
+  try { result = await fetch(c.base + "/rest/v1/rpc/consumir_limite", { method: "POST", cache: "no-store", signal: AbortSignal.timeout(10000), headers: { ...supabaseApiHeaders(service), "Content-Type": "application/json" }, body: JSON.stringify({ p_chave: `\\x${hash}`, p_janela: "900 seconds", p_maximo: 5 }) }); }
+  catch { bloquear("rpc_indisponivel"); throw new Failure(503); }
+  if (!result.ok) { bloquear("rpc_rejeitado", result.status); throw new Failure(503); }
+  let allowed: boolean;
+  try { allowed = z.boolean().parse(await result.json()); }
+  catch { bloquear("resposta_invalida"); throw new Failure(503); }
+  if (!allowed) throw new Failure(429);
   }
 }
 async function handleAuthInternal(req: Request, action: Action) {

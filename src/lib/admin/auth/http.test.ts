@@ -37,6 +37,15 @@ describe("admin auth", () => {
   expect((await handleAuth(request("login", { email: "admin@example.com", password: "secret" }, { "x-forwarded-for": "203.0.113.10" }), "login")).status).toBe(503);
   expect(f).not.toHaveBeenCalled();
  });
+  it("records only the safe reason when the trusted ingress IP is missing", async () => {
+   const f = vi.fn(); vi.stubGlobal("fetch", f); vi.stubEnv("VERCEL", "1");
+   const res = await handleAuth(request("login", { email: "admin@example.com", password: "sensitive-password" }), "login");
+   const diagnostic = JSON.parse(vi.mocked(console.error).mock.calls[0][0]);
+   expect(res.status).toBe(503); expect(f).not.toHaveBeenCalled();
+   expect(diagnostic).toEqual({ evento: "admin.login_rate_limit_blocked", motivo: "ip_indisponivel" });
+   expect(JSON.stringify(diagnostic)).not.toContain("admin@example.com");
+   expect(JSON.stringify(diagnostic)).not.toContain("sensitive-password");
+  });
  it("correlates operational logs and responses without input or secrets", async () => {
   const res = await handleAuth(request("login", { email: "private@example.com", password: "private-password" }, { "X-Observatorio-CSRF": "0", "x-request-id": "untrusted-client-id" }), "login");
   const logged = JSON.parse(vi.mocked(console.info).mock.calls[0][0]);
@@ -73,6 +82,11 @@ describe("admin auth", () => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://bad.example");
   expect((await handleAuth(request("session"), "session")).status).toBe(503);
  });
+ it("rejects an expired JWT before checking the database role", async () => {
+  const f = vi.fn().mockResolvedValue(Response.json({ message: "JWT expired" }, { status: 401 })); vi.stubGlobal("fetch", f);
+  const res = await handleAuth(request("session", undefined, { Authorization: `Bearer ${jwt()}` }), "session");
+  expect(res.status).toBe(401); expect(f).toHaveBeenCalledTimes(1);
+ });
  it("accepts validated AAL2 and returns private headers without tokens", async () => {
   const f = vi.fn(); vi.stubGlobal("fetch", f); const token = identity(f);
   const res = await handleAuth(request("session", undefined, { Authorization: `Bearer ${token}` }), "session");
@@ -92,11 +106,14 @@ describe("admin auth", () => {
  it("rejects inactive admins and insufficient roles", async () => {
   const f = vi.fn(); vi.stubGlobal("fetch", f); identity(f, "aal2", "moderador", false);
   expect((await handleAuth(request("session", undefined, { Authorization: `Bearer ${jwt()}` }), "session")).status).toBe(403);
+  f.mockImplementationOnce(() => ok({ id, factors: [] })).mockImplementationOnce(() => ok([]));
+  expect((await handleAuth(request("session", undefined, { Authorization: `Bearer ${jwt()}` }), "session")).status).toBe(403);
   identity(f); await expect(requireAdmin(request("session", undefined, { Authorization: `Bearer ${jwt()}` }), "gestor")).rejects.toMatchObject({ status: 403 });
  });
  it("checks origin and CSRF on auth mutations including bearer clients", async () => {
   const f = vi.fn(); vi.stubGlobal("fetch", f);
   for (const headers of [{ Origin: "https://evil.example" }, { "X-Observatorio-CSRF": "0" }] as Record<string, string>[]) expect((await handleAuth(request("login", {}, headers), "login")).status).toBe(403);
+  expect((await handleAuth(request("logout", {}, { "X-Observatorio-CSRF": "0", Cookie: `og_admin_access_token=${jwt()}` }), "logout")).status).toBe(403);
   expect(f).not.toHaveBeenCalled();
  });
  it("denies every protected auth action without a session", async () => {
@@ -122,12 +139,22 @@ describe("admin auth", () => {
  it("allows a short AAL1 setup cookie for first TOTP enrollment", async () => {
   const f = vi.fn().mockImplementationOnce(() => ok(true)).mockImplementationOnce(() => ok(true)).mockImplementationOnce(() => ok({ access_token: jwt("aal1"), refresh_token: "refresh", expires_in: 3600 })); vi.stubGlobal("fetch", f); identity(f, "aal1");
   const res = await handleAuth(request("login", { email: "admin@example.com", password: "secret" }), "login");
-  expect(res.status).toBe(200); expect(await res.json()).toEqual({ mfa_required: true });
-  const cookies = res.headers.get("set-cookie"); expect(cookies).toContain("og_admin_access_token="); expect(cookies).toContain("Max-Age=900"); expect(cookies).toContain("HttpOnly"); expect(cookies).toContain("Secure"); expect(cookies).toContain("SameSite=strict");
+  expect(res.status).toBe(200); expect(await res.json()).toEqual({ mfa_required: true }); expect(res.headers.get("cache-control")).toBe("no-store");
+  const cookies = res.headers.get("set-cookie"); expect(cookies).toContain("og_admin_access_token="); expect(cookies).toContain("Max-Age=900"); expect(cookies).toContain("Path=/api/admin"); expect(cookies).toContain("og_admin_refresh_token="); expect(cookies).toContain("Max-Age=28800"); expect(cookies).toContain("Path=/api/admin/auth"); expect(cookies).toContain("HttpOnly"); expect(cookies).toContain("Secure"); expect(cookies).toContain("SameSite=strict");
  });
  it("rotates refresh cookies only after full AAL2 authorization", async () => {
   const f = vi.fn().mockImplementationOnce(() => ok({ access_token: jwt(), refresh_token: "rotated", expires_in: 600 })); vi.stubGlobal("fetch", f); identity(f);
-  const res = await handleAuth(request("refresh", {}, { Cookie: "og_admin_refresh_token=old" }), "refresh"); expect(res.status).toBe(200); expect(res.headers.get("set-cookie")).toContain("rotated");
+  const res = await handleAuth(request("refresh", {}, { Cookie: "og_admin_refresh_token=old" }), "refresh"); expect(res.status).toBe(200); expect(res.headers.get("set-cookie")).toContain("rotated"); expect(res.headers.get("set-cookie")).toContain("Path=/api/admin/auth"); expect(res.headers.get("cache-control")).toBe("no-store");
+ });
+ it("denies challenges when the TOTP factor was removed", async () => {
+  const f = vi.fn().mockResolvedValueOnce(Response.json({ id, factors: [] })).mockResolvedValueOnce(Response.json([{ user_id: id, papel: "moderador", ativo: true }])); vi.stubGlobal("fetch", f);
+  const res = await handleAuth(request("challenge", { factor_id: "22345678-1234-4234-8234-123456789012" }, { Authorization: `Bearer ${jwt("aal1")}` }), "challenge");
+  expect(res.status).toBe(403); expect(f).toHaveBeenCalledTimes(2);
+ });
+ it("clears the session when a rotated refresh token is replayed", async () => {
+  const f = vi.fn().mockResolvedValueOnce(Response.json({ error: "invalid_grant" }, { status: 400 })); vi.stubGlobal("fetch", f);
+  const res = await handleAuth(request("refresh", {}, { Cookie: "og_admin_refresh_token=already-used" }), "refresh");
+  expect(res.status).toBe(401); expect(res.headers.get("set-cookie")?.match(/Max-Age=0/g)).toHaveLength(2); expect(res.headers.get("cache-control")).toBe("no-store");
  });
  it("revokes logout and clears both cookies", async () => {
   const f = vi.fn().mockResolvedValue(new Response(null, { status: 204 })); vi.stubGlobal("fetch", f);
