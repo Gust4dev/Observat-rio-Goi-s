@@ -62,6 +62,12 @@ console.log('ok    migracao_021_test.sql');
 await db.exec(await ler('../022_deduplicacao_participacao.sql'));
 await db.exec(await ler('migracao_022_test.sql'));
 console.log('ok    migracao_022_test.sql');
+await db.exec(await ler('../023_totais_indicadores_suprimidos.sql'));
+await db.exec(await ler('migracao_023_test.sql'));
+console.log('ok    migracao_023_test.sql');
+await db.exec(await ler('../024_auditoria_anonymizacao_admin.sql'));
+await db.exec(await ler('migracao_024_test.sql'));
+console.log('ok    migracao_024_test.sql');
 try {
   const n = await verificarColunasViews(db, path.join(dir, '../colunas-publicas.json'));
   console.log('ok   ', 'colunas-views (' + n + ' views)');

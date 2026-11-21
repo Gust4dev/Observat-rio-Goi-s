@@ -43,11 +43,19 @@ export function configServidor() {
   const chave = resolveSupabaseKeys(process.env).secretKey;
   if (!chave) throw new ErroRegistro("indisponivel");
   if (Buffer.byteLength(hmacSegredo, "utf8") < 32) throw new ErroRegistro("indisponivel");
+  const turnstileHostname = process.env.VERCEL_ENV === "production"
+    ? obrigatoria("TURNSTILE_HOSTNAME").toLowerCase()
+    : undefined;
+  if (turnstileHostname && (
+    turnstileHostname.length > 253
+    || !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(turnstileHostname)
+  )) throw new ErroRegistro("indisponivel");
   return {
     base: url.origin,
     chave,
     turnstileSecret: obrigatoria("TURNSTILE", "SECRET"),
     turnstileSiteKey: obrigatoria("NEXT_PUBLIC_TURNSTILE_SITE_KEY"),
+    turnstileHostname,
     hmacSegredo,
     modoPublicacao,
     fotosHabilitadas: fotosHabilitadas(),

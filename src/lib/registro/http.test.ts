@@ -10,6 +10,7 @@ const entrada = { municipio: "anapolis", categoria: "saude", titulo: "Posto sem 
 const dados = { out_id: "7419b75e-86a9-4e4a-8a1a-9fb13f701a1e", out_protocolo: "OG-26-TESTE", out_titulo: "Posto sem atendimento", out_situacao: "registrado", out_moderacao: "pendente", out_motivo_remocao: null, out_publicado_em: null, out_criado_em: "2026-10-27T12:00:00+00:00", out_atualizacoes: [], out_respostas: [] };
 let chamadas: { url: string; body: Record<string, unknown> }[];
 let respostaCaptcha = true;
+let hostnameCaptcha: string | undefined;
 let limite = true;
 let falha = "";
 let resultadoAcompanhar: unknown = [dados];
@@ -18,7 +19,7 @@ function request(body: unknown = entrada, headers: Record<string, string> = {}, 
   return new Request(`https://localhost/api/${caminho}`, { method: "POST", headers: { origin: "https://localhost", "content-type": "application/json", ...headers }, body: typeof body === "string" ? body : JSON.stringify(body) });
 }
 beforeEach(() => {
-  chamadas = []; respostaCaptcha = true; limite = true; falha = ""; repetida = false; resultadoAcompanhar = [dados];
+  chamadas = []; respostaCaptcha = true; hostnameCaptcha = undefined; limite = true; falha = ""; repetida = false; resultadoAcompanhar = [dados];
   vi.stubEnv("NODE_ENV", "test"); vi.stubEnv("VERCEL", "");
   vi.stubEnv("AMBIENTE_REGISTRO", "staging_ficticio"); vi.stubEnv("VERCEL_ENV", "");
   vi.stubEnv("ACESSO_STAGING_USUARIO", ""); vi.stubEnv("ACESSO_STAGING_SENHA", "");
@@ -28,7 +29,7 @@ beforeEach(() => {
     const url = String(input); const body = init?.body ? JSON.parse(String(init.body)) : {};
     chamadas.push({ url, body });
     if (falha && url.includes(falha)) return Response.json({ code: falha === "registrar_ocorrencia" ? "22023" : "XX000", message: "segredo IP token texto privado" }, { status: 500 });
-    if (url.includes("siteverify")) return Response.json({ success: respostaCaptcha });
+    if (url.includes("siteverify")) return Response.json({ success: respostaCaptcha, hostname: hostnameCaptcha });
     if (url.includes("/municipios?") || url.includes("/categorias?")) return Response.json([{ id: 1, slug: url.includes("municipios") ? "anapolis" : "saude" }]);
     if (url.endsWith("consumir_limite")) return Response.json(limite);
     if (url.endsWith("triagem_sinais")) return Response.json([{ out_texto_repetido: false, out_origem_sinalizada: false }]);
@@ -97,6 +98,34 @@ describe("registro HTTP", () => {
     vi.stubEnv("ACESSO_STAGING_USUARIO", "teste"); vi.stubEnv("ACESSO_STAGING_SENHA", "teste");
     expect((await registrar(request(entrada, { "x-forwarded-for": "192.0.2.1" }))).status).toBe(503);
     expect(chamadas).toHaveLength(0);
+  });
+  it.each([
+    ["observatorio-go.vercel.app", "observatorio-go.vercel.app", 201],
+    ["observatorio-go.vercel.app", "outro.example", 422],
+    ["observatorio-go.vercel.app", undefined, 422],
+    ["", "observatorio-go.vercel.app", 503],
+    ["https://observatorio-go.vercel.app", "observatorio-go.vercel.app", 503],
+  ] as const)("valida o hostname do Turnstile em Production (%s, %s)", async (esperado, recebido, status) => {
+    const ref = "a".repeat(20);
+    const host = "observatorio-go.vercel.app";
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("AMBIENTE_REGISTRO", "production");
+    vi.stubEnv("BETA_REGISTRO_TEXTUAL_ATIVA", "true");
+    vi.stubEnv("SUPABASE_PRODUCTION_PROJECT_REF", ref);
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", `https://${ref}.supabase.co`);
+    vi.stubEnv("MODO_PUBLICACAO", "moderar_tudo");
+    vi.stubEnv("FOTOS_HABILITADAS", "false");
+    vi.stubEnv("TURNSTILE_HOSTNAME", esperado);
+    hostnameCaptcha = recebido;
+    const req = new Request(`https://${host}/api/registrar`, {
+      method: "POST",
+      headers: { origin: `https://${host}`, "content-type": "application/json", "x-forwarded-for": "192.0.2.1" },
+      body: JSON.stringify(entrada),
+    });
+    expect((await registrar(req)).status).toBe(status);
+    expect(chamadas.some(c => c.url.endsWith("registrar_ocorrencia"))).toBe(status === 201);
+    if (status === 503) expect(chamadas).toHaveLength(0);
   });
   it("preview produtivo exige credenciais de staging e mantém revisão", async () => {
     vi.stubEnv("NODE_ENV", "production"); vi.stubEnv("VERCEL", "1"); vi.stubEnv("VERCEL_ENV", "preview");

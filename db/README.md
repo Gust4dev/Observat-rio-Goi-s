@@ -21,6 +21,8 @@ Migrações em ordem. Descrição das tabelas e dos estados em [`../docs/modelo-
 | `020_retencao_imagens.sql` | Prazo provisório configurável; desreferencia conteúdo vencido retido/removido e deixa Storage remover órfãos após 24h e nova checagem |
 | `021_fila_moderacao_filtros.sql` | Acrescenta IDs de município e categoria à fila administrativa sem expor a view ao público |
 | `022_deduplicacao_participacao.sql` | Deduplica denúncias e respostas pela origem HMAC enquanto aguardam revisão e apaga a chave ao resolver/revisar |
+| `023_totais_indicadores_suprimidos.sql` | Totais globais usam somente o universo retido por 019, impedindo diferença com recortes |
+| `024_auditoria_anonymizacao_admin.sql` | Permite apenas anonimização de `admin_id` por cascata da FK, mantendo auditoria append-only |
 | `seed/staging_ficticio.sql` | Dados fictícios **só para staging** (trava aborta se houver dado real) |
 | `tests/` | Stub do Supabase, testes de segurança (`rls_test.sql`, `migracao_007_test.sql`) e executor |
 
@@ -137,7 +139,7 @@ Aplicar `018_admin_operacoes.sql` após 017. Todas as RPCs exigem sessão autent
 `interno.configuracao_retencao` controla `imagens_rejeitadas_retidas_dias`; o padrão é 365 dias e é provisório de engenharia, não prazo legal aprovado. `interno.limpar_expirados()` não apaga a linha da imagem: após o prazo e sem lease administrativo ativo, desreferencia o caminho do Storage e limpa o hash de entrada e o contexto. O limpador M4 encontra o objeto privado sem referência após 24 horas, reconsulta a referência antes de remover e mantém a linha anonimizada para histórico. A retenção configurada é exercitada em `tests/migracao_020_test.sql`.
 
 
-### Supressão de indicadores (019, M6)
+### Supressão de indicadores (019 e 023, M6)
 
 Aplicar `019_supressao_indicadores.sql` após 018. O limiar **k=5** é provisório de engenharia,
 não uma decisão jurídica nem garantia de anonimato. `v_dados_painel` omite células com menos
@@ -152,13 +154,25 @@ Portanto mesmo uma célula com cinco ou mais relatos pode ser omitida por prote�
 esses subtotais representam cobertura parcial, e ausência não significa zero ocorrências.
 Colunas, tipos e permissões públicas permanecem iguais.
 
-`v_indicadores_gerais` continua expondo totais globais completos. A diferença entre esses totais
-e as células retidas ainda pode revelar o volume suprimido, especialmente se houver uma única
-coorte oculta. Publicações sucessivas, cruzamentos externos e a própria listagem pública de
-ocorrências também permitem derivar contagens. A medida é defesa em profundidade para os
-indicadores, inclusive suas subcontagens; não fornece anonimização formal nem privacidade diferencial.
+Aplicar `023_totais_indicadores_suprimidos.sql` após 022 para alinhar também
+`v_indicadores_gerais` ao mesmo universo retido de `v_dados_painel`: total de ocorrências,
+municípios distintos e as duas subcontagens. A fixture de regressão demonstra o oráculo anterior:
+14 relatos publicados menos 10 retidos revelavam uma única coorte oculta de quatro relatos;
+as subcontagens globais também permitiam a mesma diferença. Com 023, todos os indicadores
+somam exclusivamente as células retidas, preservando colunas, tipos e grants existentes.
 
-`npm run db:test` executa o contrato histórico antes de 019, depois a suíte 019 e a allowlist
-com a migração aplicada; o seed histórico é validado até 018. `node db/tests/mutacao_019.mjs`
+Os totais globais passam a representar **cobertura parcial**, não o número integral de relatos
+publicados. Ausência de célula/coorte e total retido zero não significam ausência de ocorrências.
+Não publicar em paralelo um total integral ou um subtotal do universo original que permita
+desfazer a supressão. Publicações sucessivas, cruzamentos externos e a própria listagem pública
+de ocorrências continuam permitindo derivar contagens. A medida é defesa em profundidade para
+os indicadores, inclusive suas subcontagens; não fornece anonimização formal nem privacidade diferencial.
+
+`npm run db:test` executa o contrato histórico antes de 019, depois as suítes 019, 023 e 024 e a allowlist
+com as migrações aplicadas; o seed histórico é validado até 018. `node db/tests/mutacao_019.mjs`
 valida o controle e prova que remover o `HAVING` expõe uma célula de quatro relatos e quebra
-a suíte. Os bancos são locais e descartáveis; nenhuma migração remota é aplicada.
+a suíte. `node db/tests/mutacao_023.mjs` verifica a correção, sua idempotência, a allowlist e
+que voltar ao total integral anterior quebra a regressão por diferença de quatro relatos.
+`migracao_024_test.sql` cobre exclusão Auth com preservação e anonimização do histórico e mantém
+bloqueadas alterações diretas de conteúdo. Os bancos são locais e descartáveis; nenhuma migração
+remota é aplicada por esses comandos.

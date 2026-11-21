@@ -95,7 +95,10 @@ export async function verificarTurnstile(token: string, config: ConfigRegistro) 
   catch { throw new ErroRegistro("indisponivel"); }
   if (!r.ok) throw new ErroRegistro("indisponivel");
   let corpo: unknown; try { corpo = await r.json(); } catch { throw new ErroRegistro("indisponivel"); }
-  const resultado = z.object({ success: z.boolean() }).safeParse(corpo);
+  const resultado = z.object({ success: z.boolean(), hostname: z.string().optional() }).safeParse(corpo);
   if (!resultado.success) throw new ErroRegistro("indisponivel");
   if (!resultado.data.success) throw new ErroRegistro("captcha_invalido");
+  if (config.turnstileHostname && resultado.data.hostname?.toLowerCase() !== config.turnstileHostname) {
+    throw new ErroRegistro("captcha_invalido");
+  }
 }
