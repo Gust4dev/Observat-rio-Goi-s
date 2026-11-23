@@ -3,11 +3,17 @@ import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import catalogo from '@/lib/mapa/municipios.json';
-import { pontoInterior, lerGeometria, destinoMunicipio, textoPainel } from '@/lib/mapa/geometria';
+import { pontoInterior, lerGeometria, destinoMunicipio, textoPainel, estadoVisualMunicipio } from '@/lib/mapa/geometria';
 import { MapaGoias } from './MapaGoias';
 vi.mock('next/navigation',()=>({useRouter:()=>({push:()=>{}})}));
 const svg=readFileSync('public/mapas/goias-municipios.svg','utf8');
 describe('mapa municipal',()=>{
+ it('dá precedência à seleção e à navegação por teclado no polígono sob o ponteiro', () => {
+  expect(estadoVisualMunicipio('goiania', 'goiania', 'goiania', 'goiania')).toBe('selecionado');
+  expect(estadoVisualMunicipio('goiania', 'anapolis', 'goiania', 'goiania')).toBe('candidato');
+  expect(estadoVisualMunicipio('goiania', 'anapolis', 'trindade', 'goiania')).toBe('hover');
+  expect(estadoVisualMunicipio('goiania', 'anapolis', 'trindade', undefined)).toBe('padrao');
+ });
  it('preserva 246 códigos do catálogo e todos têm alvo interior ampliável sem colisão',()=>{
   expect(Buffer.byteLength(svg)).toBeLessThan(30000);
   const paths=[...svg.matchAll(/<path id="(\d+)" d="([^"]+)"/g)];
@@ -45,5 +51,21 @@ describe('mapa municipal',()=>{
  it('SSR: sem município inicial não há seleção nem contagem', ()=>{
   const html=renderToStaticMarkup(createElement(MapaGoias,{municipios:catalogo}));
   expect(html.match(/<option /g)).toHaveLength(247);expect(html.match(/selected=""/g)).toHaveLength(1);expect(html).toContain('<option value="" selected="">');expect(html).toContain('Escolha um município para consultar');
+ });
+ it('apresenta promessa, seletor, ações e resumo antes do mapa no hero', ()=>{
+  const html=renderToStaticMarkup(createElement(MapaGoias,{municipios:catalogo,variante:'hero'}));
+  expect(html).toContain('aria-label="Painel de seleção do município"');
+  expect(html).toContain('aria-label="Mapa interativo de Goiás"');
+  expect(html).toContain('246 municípios');
+  expect(html).toContain('Passe para ver · clique para selecionar');
+  expect(html).toContain('Toque para selecionar');
+  expect(html).toContain('Goiás, visto de perto.');
+  expect(html.match(/aria-label="Mapa interativo de Goiás"/g)).toHaveLength(1);
+  expect(html.indexOf('Goiás, visto de perto.')).toBeLessThan(html.indexOf('<select '));
+  expect(html.indexOf('<select ')).toBeLessThan(html.indexOf('Registrar um problema'));
+  expect(html.indexOf('Registrar um problema')).toBeLessThan(html.indexOf('Ver relatos em Goiás'));
+  expect(html.indexOf('Ver relatos em Goiás')).toBeLessThan(html.indexOf('aria-label="Resumo do município"'));
+  expect(html.indexOf('aria-label="Resumo do município"')).toBeLessThan(html.indexOf('aria-label="Mapa interativo de Goiás"'));
+  expect(html).not.toContain('Resumo da malha municipal');
  });
 });

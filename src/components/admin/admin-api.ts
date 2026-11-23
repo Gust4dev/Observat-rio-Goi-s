@@ -22,7 +22,11 @@ export function resumoAuditoriaAdmin(evento: { acao?: string | null; ocorrencia_
 }
 
 export type ColecaoAdmin = "denuncias" | "respostas" | "atualizacoes";
-export type FiltrosFilaAdmin = { ordem: "antigos" | "recentes"; pendencia: "" | "denuncia" | "foto_pendente" };
+export type FiltrosFilaAdmin = {
+  ordem: "antigos" | "recentes";
+  pendencia: "" | "denuncia" | "foto_pendente";
+  moderacao?: "" | "publicado" | "removido";
+};
 export type HistoricoPaginasAdmin = readonly (string | null)[];
 export const primeiraPaginaAdmin: HistoricoPaginasAdmin = [null];
 
@@ -40,6 +44,7 @@ export function voltarPaginaAdmin(historico: HistoricoPaginasAdmin): HistoricoPa
 
 export function rotaFilaAdmin(filtros: FiltrosFilaAdmin, cursor?: string | null) {
   const query = new URLSearchParams({ ordem: filtros.ordem, limite: "50" });
+  if (filtros.moderacao) query.set("moderacao", filtros.moderacao);
   if (filtros.pendencia) query.set(filtros.pendencia, "true");
   if (cursor) query.set("cursor", cursor);
   return "/api/admin/fila?" + query;

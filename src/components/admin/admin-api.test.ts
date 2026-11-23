@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { adminRequest, mensagemErroAdmin, resumoAuditoriaAdmin, rotaColecaoAdmin, rotaFilaAdmin } from "./admin-api";
+
+it("envia o filtro explícito de publicados", () => {
+  const rota = new URL(rotaFilaAdmin({ ordem: "recentes", pendencia: "", moderacao: "publicado" }), "https://app.example");
+  expect(rota.searchParams.get("moderacao")).toBe("publicado");
+  expect(rota.searchParams.get("ordem")).toBe("recentes");
+});
 import { avancarPaginaAdmin, cursorPaginaAdmin, voltarPaginaAdmin } from "./admin-api";
 
 afterEach(() => vi.unstubAllGlobals());

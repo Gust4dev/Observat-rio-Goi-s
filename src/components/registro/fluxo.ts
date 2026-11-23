@@ -8,6 +8,7 @@ export type CorpoRegistroEntrada = {
   tokenHash: string;
   chaveIdempotencia: string;
   turnstile?: string;
+  aceite_publicacao_imediata?: true;
 };
 
 export type CorpoRegistro = Omit<CorpoRegistroEntrada, "tokenHash" | "chaveIdempotencia"> & {
@@ -24,6 +25,7 @@ export function criarCorpoRegistro(dados: CorpoRegistroEntrada): CorpoRegistro {
     token_hash: dados.tokenHash,
     chave_idempotencia: dados.chaveIdempotencia,
     ...(dados.turnstile === undefined ? {} : { turnstile: dados.turnstile }),
+    ...(dados.aceite_publicacao_imediata ? { aceite_publicacao_imediata: true } : {}),
   };
 }
 

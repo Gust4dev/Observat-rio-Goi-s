@@ -1,5 +1,14 @@
 import { ErroRegistro } from "./erros";
-import { supabaseProjectRef } from "../supabase-origin";
+import { publicSupabaseOriginAllowed, supabaseProjectRef } from "../supabase-origin";
+
+export function publicacaoTextoImediata(): boolean {
+  return process.env.VERCEL === "1"
+    && process.env.VERCEL_ENV === "production"
+    && process.env.PUBLICACAO_IMEDIATA_RELATOS === "true"
+    && ambienteEscritaHabilitado()
+    && publicSupabaseOriginAllowed(process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_PRODUCTION_PROJECT_REF, process.env.SUPABASE_PRODUCTION_DATA_APPROVED, "production");
+}
 
 export function ambienteEscritaHabilitado(): boolean {
   if (process.env.VERCEL_ENV === "production") {
@@ -30,4 +39,11 @@ export function captchaRegistroObrigatorio(): boolean {
     && process.env.VERCEL_ENV === "production"
     && process.env.BETA_REGISTRO_PROTEGIDA_VERCEL === "true"
     && ambienteEscritaHabilitado());
+}
+
+export function participacaoProtegidaVercel(): boolean {
+  return !captchaRegistroObrigatorio()
+    && process.env.BETA_PARTICIPACAO_PROTEGIDA_VERCEL === "true"
+    && publicSupabaseOriginAllowed(process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_PRODUCTION_PROJECT_REF, process.env.SUPABASE_PRODUCTION_DATA_APPROVED, "production");
 }

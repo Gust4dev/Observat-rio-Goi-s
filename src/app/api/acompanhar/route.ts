@@ -14,8 +14,8 @@ const resultadoSchema = z.array(z.object({ out_id: z.uuid(), out_protocolo: z.st
 export async function POST(request: Request) {
   try {
     const entrada = await entradaHttp(request, acompanharSchema, true);
-    const config = configServidor(); await limitarHttp(request, config, "acompanhar");
-    const [r] = await rpc("acompanhar_por_token", { p_token_hash: bytea(hashSha256(entrada.token)) }, resultadoSchema);
+    const config = configServidor("titular"); await limitarHttp(request, config, "acompanhar");
+    const [r] = await rpc("acompanhar_por_token", { p_token_hash: bytea(hashSha256(entrada.token)) }, resultadoSchema, config);
     if (!r) throw new ErroRegistro("token_invalido");
     return respostaPrivada({ protocolo: r.out_protocolo, titulo: r.out_titulo, situacao: r.out_situacao, moderacao: r.out_moderacao, motivo_remocao: r.out_motivo_remocao, publicado_em: r.out_publicado_em, criado_em: r.out_criado_em, atualizacoes: r.out_atualizacoes, respostas: r.out_respostas });
   } catch (erro) { return falhaHttp(erro, "acompanhar"); }

@@ -24,10 +24,10 @@ beforeEach(() => {
   });
 });
 afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals();});
-async function req(ordem="1",contexto="Buraco na calçada",extra=false,extraHeaders:Record<string,string>={}) {
-  const bytes=await sharp({create:{width:4,height:4,channels:3,background:"red"}}).jpeg().toBuffer();
-  const f=new FormData(); f.set("token",token);f.set("ordem",ordem);f.set("contexto",contexto);f.set("foto",new File([new Uint8Array(bytes)],"privado.jpg",{type:"image/jpeg"})); if(extra) f.append("foto",new File([],"extra.jpg"));
-  return new Request("https://localhost/api/imagem",{method:"POST",headers:{origin:"https://localhost",...extraHeaders},body:f});
+async function req(ordem="1",contexto="Buraco na calçada",extra=false,extraHeaders:Record<string,string>={},mime="image/jpeg",conteudo?:Uint8Array,query="") {
+  const bytes=conteudo??await sharp({create:{width:4,height:4,channels:3,background:"red"}}).jpeg().toBuffer();
+  const f=new FormData(); f.set("token",token);f.set("ordem",ordem);f.set("contexto",contexto);f.set("foto",new File([new Uint8Array(bytes)],"privado.jpg",{type:mime})); if(extra) f.append("foto",new File([],"extra.jpg"));
+  return new Request(`https://localhost/api/imagem${query}`,{method:"POST",headers:{origin:"https://localhost",...extraHeaders},body:f});
 }
 it.each([undefined, "", "false", "TRUE", "1", " true "])("falha fechado com flag %s antes de consumir o corpo", async valor => {
   if (valor === undefined) delete process.env.FOTOS_HABILITADAS; else vi.stubEnv("FOTOS_HABILITADAS", valor);
@@ -80,14 +80,39 @@ it("bloqueia origem, body real grande e produção",async()=>{
   expect((await POST(semHeader)).status).toBe(413);
   vi.stubEnv("VERCEL_ENV","production");expect((await POST(await req())).status).toBe(503);
 });
+it("recusa Origin ausente, Fetch Metadata cross-site e token na query", async()=>{
+  expect((await POST(await req("1", "Buraco na calçada", false, { origin: "" }))).status).toBe(403);
+  expect((await POST(await req("1", "Buraco na calçada", false, { "sec-fetch-site": "cross-site" }))).status).toBe(403);
+  expect((await POST(await req("1", "Buraco na calçada", false, {}, "image/jpeg", undefined, `?token=${token}`))).status).toBe(422);
+  expect(calls).toHaveLength(0);
+});
+it("falha fechado se o rate limit ou Supabase estiver indisponível", async()=>{
+  vi.stubGlobal("fetch", async (input: string | URL | Request) => {
+    calls.push({ url: String(input) });
+    if (String(input).endsWith("consumir_limite")) return Response.json({ message: "segredo" }, { status: 503 });
+    throw new Error("Supabase segredo indisponível");
+  });
+  const limiteIndisponivel = await POST(await req());
+  expect(limiteIndisponivel.status).toBe(503);
+  expect(await limiteIndisponivel.text()).not.toMatch(/segredo|indisponível/);
+  expect(calls).toHaveLength(1);
+
+  calls=[];
+  vi.stubGlobal("fetch", async (input: string | URL | Request) => { calls.push({ url: String(input) }); throw new Error("Supabase segredo indisponível"); });
+  const supabaseIndisponivel = await POST(await req());
+  expect(supabaseIndisponivel.status).toBe(503);
+  expect(await supabaseIndisponivel.text()).not.toMatch(/segredo|indisponível/);
+  expect(calls).toHaveLength(1);
+});
 
 it("aceita origem validada pelo host confiável do proxy",async()=>{
  const resposta=await POST(await req("1","Buraco na calçada",false,{host:"127.0.0.1:3000",origin:"https://127.0.0.1:3000"}));
  expect(resposta.status).toBe(201);
 });
 
-it("valida token antes de consumir limite e checa slot antes de processar", async()=>{
- tokenValido=false; expect((await POST(await req())).status).toBe(404); expect(calls.some(c=>c.url.endsWith("consumir_limite"))).toBe(false);
+it("aplica rate limit antes das consultas de token e slot", async()=>{
+ tokenValido=false; expect((await POST(await req())).status).toBe(404); expect(calls.some(c=>c.url.endsWith("consumir_limite"))).toBe(true);
+ expect(calls.some(c=>c.url.endsWith("acompanhar_por_token"))).toBe(true);
  calls=[];tokenValido=true;slotLivre=false; expect((await POST(await req())).status).toBe(409);expect(calls.some(c=>c.url.includes("/storage/"))).toBe(false);
 });
 it("retry reconhecido evita novo processamento e upload", async()=>{
@@ -95,10 +120,20 @@ it("retry reconhecido evita novo processamento e upload", async()=>{
  expect(calls.some(c=>c.url.includes("/storage/"))).toBe(false);
  expect(calls.some(c=>c.url.endsWith("registrar_imagem"))).toBe(false);
 });
-it("usa limite próprio de fotos depois da validação do slot", async()=>{
+it("usa o limite próprio antes de consultar o slot", async()=>{
  expect((await POST(await req())).status).toBe(201);
  const limite=calls.find(c=>c.url.endsWith("consumir_limite"))!;expect(JSON.parse(String(limite.init?.body)).p_maximo).toBe(limiteFotoConfigurado);
- expect(calls.findIndex(c=>c.url.endsWith("consultar_slot_imagem"))).toBeLessThan(calls.indexOf(limite));
+ expect(calls.indexOf(limite)).toBeLessThan(calls.findIndex(c=>c.url.endsWith("consultar_slot_imagem")));
+});
+
+it.each([
+  ["MIME falso", "image/png", undefined],
+  ["conteúdo indecodificável", "image/jpeg", new Uint8Array([1, 2, 3, 4])],
+])("rejeita %s antes de consultar token/slot ou escrever no Storage", async (_caso, mime, conteudo) => {
+  const resposta = await POST(await req("1", "Buraco na calçada", false, {}, mime, conteudo));
+  expect(resposta.status).toBe(422);
+  expect(calls).toHaveLength(0);
+  expect(calls.some(c => c.url.includes("/storage/"))).toBe(false);
 });
 
 it("contexto alterado e uploads simultâneos usam a mesma identidade de arquivo", async()=>{

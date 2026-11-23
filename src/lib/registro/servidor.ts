@@ -1,10 +1,11 @@
 import "server-only";
 import type { ZodType } from "zod";
 import { ErroRegistro } from "./erros";
-import { ambienteEscritaHabilitado, captchaRegistroObrigatorio } from "./staging";
+import { ambienteEscritaHabilitado, captchaRegistroObrigatorio, participacaoProtegidaVercel } from "./staging";
 import { resolveSupabaseKeys, supabaseApiHeaders } from "../supabase-keys.mjs";
+import { publicSupabaseOriginAllowed } from "../supabase-origin";
 
-const FUNCOES = ["registrar_ocorrencia", "registrar_imagem", "consultar_slot_imagem", "acompanhar_por_token", "solicitar_exclusao_por_token", "consumir_limite", "triagem_sinais"] as const;
+const FUNCOES = ["registrar_ocorrencia", "registrar_imagem", "consultar_slot_imagem", "acompanhar_por_token", "solicitar_exclusao_por_token", "consumir_limite", "triagem_sinais", "registrar_confirmacao"] as const;
 export type FuncaoRegistro = (typeof FUNCOES)[number];
 
 export function fotosHabilitadas(): boolean {
@@ -31,20 +32,25 @@ function inteiro(nome: string): number {
 }
 
 /** Lida apenas no servidor, sem exportar configuração para componente de cliente. */
-export function configServidor(contexto?: "registrar") {
+export function configServidor(contexto?: "registrar" | "titular" | "participacao") {
   let url: URL;
   try { url = new URL(obrigatoria("NEXT_PUBLIC_SUPABASE_URL")); }
   catch { throw new ErroRegistro("indisponivel"); }
   const loopbackDev = process.env.NODE_ENV === "development" && url.protocol === "http:"
     && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
   if ((url.protocol !== "https:" && !loopbackDev) || url.username || url.password || url.search || url.hash || url.pathname !== "/") throw new ErroRegistro("indisponivel");
+  if (contexto === "titular" && process.env.VERCEL_ENV === "production"
+    && !publicSupabaseOriginAllowed(url.origin, process.env.SUPABASE_PRODUCTION_PROJECT_REF,
+      process.env.SUPABASE_PRODUCTION_DATA_APPROVED, "production")) throw new ErroRegistro("indisponivel");
   const modoPublicacao = process.env.MODO_PUBLICACAO?.trim() || "moderar_tudo";
   if (modoPublicacao !== "moderar_tudo" && modoPublicacao !== "texto_automatico") throw new ErroRegistro("indisponivel");
   const hmacSegredo = obrigatoria("HMAC", "SEGREDO");
   const chave = resolveSupabaseKeys(process.env).secretKey;
   if (!chave) throw new ErroRegistro("indisponivel");
   if (Buffer.byteLength(hmacSegredo, "utf8") < 32) throw new ErroRegistro("indisponivel");
-  const captchaObrigatorio = contexto !== "registrar" || captchaRegistroObrigatorio();
+  const captchaObrigatorio = contexto === "registrar" ? captchaRegistroObrigatorio()
+    : contexto === "participacao" ? !participacaoProtegidaVercel()
+    : contexto !== "titular";
   const turnstileHostname = captchaObrigatorio && process.env.VERCEL_ENV === "production"
     ? obrigatoria("TURNSTILE_HOSTNAME").toLowerCase()
     : undefined;

@@ -1,3 +1,3 @@
-import { afetaIndisponivel } from "@/lib/registro/participacao";
+import { confirmarAfeta } from "@/lib/registro/participacao";
 
-export async function POST(request: Request) { return afetaIndisponivel(request); }
+export async function POST(request: Request) { return confirmarAfeta(request); }

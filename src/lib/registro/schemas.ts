@@ -32,6 +32,7 @@ export const registroSchema = z.strictObject({
   descricao: texto(20, LIMITE_DESCRICAO, "Conte o que está acontecendo em 20 a 4000 caracteres."),
   token_hash: tokenHashSchema,
   chave_idempotencia: chaveIdempotenciaSchema,
+  aceite_publicacao_imediata: z.literal(true).optional(),
   turnstile: z.string().min(1).max(2048),
 });
 export const registroProtegidoVercelSchema = registroSchema.partial({ turnstile: true });

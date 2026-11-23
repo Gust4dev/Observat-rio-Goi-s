@@ -76,6 +76,9 @@ export default function AdminConsole() {
   const [filtros, setFiltros] = useState<FiltrosFilaAdmin>({ ordem: "antigos", pendencia: "" });
   const [resumo, setResumo] = useState<ResumoFila | null>(null);
   const [detalhe, setDetalhe] = useState<Detalhe | null>(null);
+  const [contato, setContato] = useState<{ out_nome: string | null; out_whatsapp: string | null }[] | null>(null);
+  const [lote, setLote] = useState<Record<string, number>>({});
+  const [foto, setFoto] = useState<{ id: string; url: string } | null>(null);
   const [conflito, setConflito] = useState(false);
   const [respostaAcao, setRespostaAcao] = useState<"publicar" | "rejeitar" | "">("");
   const [denunciaStatus, setDenunciaStatus] = useState("");
@@ -150,7 +153,10 @@ export default function AdminConsole() {
   }, [load, invalidarLeitura]);
   async function submit(event: FormEvent, action: (data: FormData) => Promise<void>) {
     event.preventDefault(); setBusy(true); setError(""); setNotice("");
-    try { await action(new FormData(event.currentTarget as HTMLFormElement)); }
+    try {
+      const submitter = (event.nativeEvent as SubmitEvent).submitter;
+      await action(new FormData(event.currentTarget as HTMLFormElement, submitter));
+    }
     catch (e) { setFailure(e); }
     finally { setBusy(false); }
   }
@@ -172,7 +178,8 @@ export default function AdminConsole() {
     setError("");
     setNotice("");
     try {
-      await api(path, body);
+      const resultado = await api<{ limpeza_pendente?: boolean } | null>(path, body);
+      if (resultado?.limpeza_pendente) text += " A limpeza dos arquivos da foto será retomada automaticamente.";
     } catch (e) {
       if (e instanceof AdminApiError && e.status === 409 && selected && section !== "equipe") setConflito(true);
       throw e;
@@ -209,6 +216,8 @@ export default function AdminConsole() {
   function limparSelecao() {
     setSelected(null);
     setDetalhe(null);
+    setContato(null);
+    setFoto(null);
     setConflito(false);
     setModAction("");
     setModReason("");
@@ -231,6 +240,7 @@ export default function AdminConsole() {
     if (section === next) return;
     setSection(next);
     setError("");
+    setLote({});
     limparSelecao();
   }
   if (!papel) return <section className="mx-auto max-w-lg rounded-2xl border bg-white p-6 shadow-sm">
@@ -244,7 +254,7 @@ export default function AdminConsole() {
       <form className="mt-5 space-y-4" onSubmit={e => void submit(e, verify)}>{enrollInfo&&stage==="enroll"&&<div className="rounded bg-gray-50 p-3 text-sm"><p>Cadastre este fator TOTP no aplicativo autenticador.</p>{enrollInfo.totp.qr_code.startsWith("data:image/")&&<Image alt="QR de inscrição TOTP" unoptimized width={192} height={192} className="my-3 max-h-48 w-auto" src={enrollInfo.totp.qr_code}/>}<code className="break-all">{enrollInfo.totp.secret}</code></div>}<label className="block">Código TOTP de seis dígitos<input className="mt-1 w-full rounded border p-2" name="code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required value={code} onChange={e => setCode(e.target.value)} /></label><button disabled={busy} className="rounded bg-emerald-900 px-4 py-2 text-white">{stage==="enroll"?"Continuar para verificação":"Confirmar MFA"}</button></form>}
   </section>;
   const podeDecidir = !busy && !conflito && typeof selected?.versao_admin === "number";
-  return <div><header className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-sm uppercase text-emerald-900">Observatório Goiás</p><h1 className="text-3xl font-bold">Console administrativo</h1><p>Sessão AAL2 · {papel}</p></div><button className="rounded border px-4 py-2" onClick={()=>run(async()=>{await api("/api/admin/auth/logout",{});setPapel(null);setStage("login");})}>Encerrar sessão</button></header>
+  return <div><header className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-sm uppercase text-emerald-900">Observatório Goiás</p><h1 className="text-3xl font-bold">Console administrativo</h1><p>Sessão AAL2 · {papel}</p></div><button disabled={busy} className="rounded border px-4 py-2" onClick={()=>run(async()=>{await api("/api/admin/auth/logout",{});limparSelecao();setLote({});setPapel(null);setStage("login");})}>Encerrar sessão</button></header>
     {error && <p role="alert" className="my-4 rounded bg-red-50 p-3 text-red-800">{error}</p>}{notice && <p role="status" className="my-4 rounded bg-green-50 p-3 text-green-800">{notice}</p>}
 
     <nav className="my-5 flex flex-wrap gap-2">
@@ -262,6 +272,18 @@ export default function AdminConsole() {
         </div>
         {section === "fila" && <fieldset disabled={busy} className="space-y-2 border-b p-4">
           <legend className="sr-only">Filtros da fila</legend>
+          <label className="mr-4">Moderação{" "}
+            <select value={filtros.moderacao ?? ""} onChange={e => {
+              const moderacao = e.target.value as FiltrosFilaAdmin["moderacao"];
+              setError("");
+              setLote({});
+              setFiltros(v => ({ ...v, moderacao, ordem: moderacao ? "recentes" : "antigos" }));
+            }} className="rounded border p-1">
+              <option value="">Fila de pendências</option>
+              <option value="publicado">Publicados recentes</option>
+              {papel !== "moderador" && <option value="removido">Removidos recentes</option>}
+            </select>
+          </label>
           <label className="mr-4">Pendências{" "}
             <select value={filtros.pendencia} onChange={e => {
               const pendencia = e.target.value as FiltrosFilaAdmin["pendencia"];
@@ -291,7 +313,22 @@ export default function AdminConsole() {
         </fieldset>}
         {busy ? <p className="p-4">Carregando…</p> : rows.length ? rows.map(row => {
           const audit = section === "auditoria" ? resumoAuditoriaAdmin(row) : null;
-          return <button key={row.id || row.user_id} onClick={() => run(() => choose(row))} className="block w-full border-b p-4 text-left hover:bg-gray-50">
+          const id = typeof row.id === "string" ? row.id : "";
+          const versao = row.versao_admin;
+          return <div key={row.id || row.user_id} className="border-b">
+          {section === "fila" && id && versao && row.moderacao !== "removido" && <label className="mx-4 mt-2 block text-sm">
+            <input type="checkbox" checked={id in lote} disabled={!(id in lote) && Object.keys(lote).length >= 50}
+              onChange={e => {
+                const marcado = e.target.checked;
+                setLote(anterior => {
+                  const proximos = { ...anterior };
+                  if (marcado) proximos[id] = versao;
+                  else delete proximos[id];
+                  return proximos;
+                });
+              }}/> Incluir {row.protocolo} na ação em lote
+          </label>}
+          <button onClick={() => run(() => choose(row))} className="block w-full p-4 text-left hover:bg-gray-50">
             <strong>{audit?.titulo || row.protocolo || row.user_id || row.id}</strong>
             {audit ? null : <> · {row.titulo || row.texto || row.papel}</>}
             <small className="block text-gray-600">{audit?.detalhe || row.municipio_nome || row.moderacao || row.status || String(row.ativo)}</small>
@@ -300,8 +337,26 @@ export default function AdminConsole() {
               {row.denuncias_abertas ? ` · ${row.denuncias_abertas} denúncias abertas` : ""}
               {row.imagens_pendentes ? ` · ${row.imagens_pendentes} fotos pendentes` : ""}
             </small>}
-          </button>;
+          </button></div>;
         }) : <p className="p-4 text-gray-600">Nenhum item encontrado.</p>}
+        {section === "fila" && Object.keys(lote).length > 0 && <form className="space-y-2 p-4" onSubmit={e => void submit(e, async d => {
+          const ids = Object.keys(lote);
+          try {
+            await api("/api/admin/ocorrencias/lote", { ids, versoes_esperadas: ids.map(id => lote[id]), acao: d.get("acao"), motivo: d.get("motivo") });
+            setNotice("Ação em lote concluída.");
+          } finally {
+            setLote({});
+            limparSelecao();
+            await load();
+          }
+        })}>
+          <fieldset disabled={busy}>
+            <legend className="font-semibold">Ação em lote para {Object.keys(lote).length} relatos</legend>
+            <select aria-label="Ação em lote" name="acao"><option value="aprovar">Aprovar</option><option value="reter">Reter</option></select>
+            <input aria-label="Motivo da ação em lote" name="motivo" required maxLength={1000} className="mx-2 rounded border p-2"/>
+            <button className="rounded border px-3 py-2">Aplicar ao lote</button>
+          </fieldset>
+        </form>}
         {historico.length > 1 && <button disabled={busy} className="m-4 rounded border px-4 py-2" onClick={() => {
           setError("");
           run(() => load(voltarPaginaAdmin(historico)));
@@ -325,9 +380,19 @@ export default function AdminConsole() {
           finally { setBusy(false); }
         })}>Recarregar estado do item</button>}
         {section === "fila" && <>
+          {papel !== "moderador" && <section className="my-3 space-y-2">
+            <button type="button" className="rounded border px-3 py-2" disabled={busy} onClick={() => run(async () => {
+              setBusy(true);
+              try { setContato(await api<NonNullable<typeof contato>>("/api/admin/ocorrencias/" + selected.id + "/contato")); }
+              finally { setBusy(false); }
+            })}>Consultar contato privado (auditado)</button>
+            {contato && <p>{contato[0] ? [contato[0].out_nome, contato[0].out_whatsapp].filter(Boolean).join(" · ") : "Nenhum contato registrado."}</p>}
+          </section>}
           <fieldset disabled={!podeDecidir} className="flex flex-wrap gap-2">
             <legend className="sr-only">Ações de moderação</legend>
-            {["aprovar", "reter", "remover", ...(papel === "moderador" ? [] : ["restaurar"])].map(a =>
+            {(selected.moderacao === "removido"
+              ? (papel === "moderador" ? [] : ["restaurar"])
+              : (selected.moderacao === "publicado" ? ["reter", "remover"] : ["aprovar", "reter", "remover"])).map(a =>
               <button key={a} className="rounded border px-3 py-2" onClick={() => { setModAction(a); setModReason(""); }}>{a}</button>
             )}
           </fieldset>
@@ -348,6 +413,25 @@ export default function AdminConsole() {
               {modAction === "remover" && <label className="block">Código do motivo<select name="motivo_codigo" value={modCode} onChange={e => setModCode(e.target.value)} className="mt-1 w-full rounded border p-2">{["dados_pessoais", "conteudo_ofensivo", "fora_escopo", "spam", "duplicidade", "outro"].map(c => <option key={c}>{c}</option>)}</select></label>}
               <button className="rounded bg-emerald-900 px-3 py-2 text-white">Confirmar</button>
               <button type="button" className="ml-2 rounded border px-3 py-2" onClick={() => setModAction("")}>Cancelar</button>
+            </fieldset>
+          </form>}
+          {selected.moderacao !== "removido" && rows.some(row => row.moderacao === "publicado" && row.id !== selected.id) && <form className="mt-4 space-y-2 border-t pt-3" onSubmit={e => void submit(e, async d => {
+            const destino = rows.find(row => row.id === d.get("destino") && row.moderacao === "publicado");
+            if (!podeDecidir || !destino?.versao_admin) return;
+            await mutate("/api/admin/ocorrencias/" + selected.id + "/mesclar", {
+              destino: destino.id, motivo: d.get("motivo"), versao_esperada: selected.versao_admin,
+              versao_destino_esperada: destino.versao_admin,
+            }, "Duplicidade registrada.");
+          })}>
+            <fieldset disabled={!podeDecidir}>
+              <legend className="font-semibold">Mesclar com relato publicado desta página</legend>
+              <select name="destino" aria-label="Relato de destino" required defaultValue="">
+                <option value="" disabled>Selecione o destino</option>
+                {rows.filter(row => row.moderacao === "publicado" && row.id !== selected.id).map(row =>
+                  <option key={row.id} value={row.id}>{row.protocolo} · {row.titulo}</option>)}
+              </select>
+              <input name="motivo" aria-label="Motivo da mescla" required maxLength={1000} className="mx-2 rounded border p-2"/>
+              <button className="rounded border px-3 py-2">Confirmar mescla</button>
             </fieldset>
           </form>}
           <form className="mt-5 border-t pt-4" onSubmit={e => void submit(e, async d => {
@@ -384,7 +468,40 @@ export default function AdminConsole() {
           {detalhe && selected.id && <>
             <section className="mt-4 border-t pt-3">
               <h3 className="font-semibold">Fotos</h3>
-              {detalhe.imagens.length ? <ul>{detalhe.imagens.map(img => <li key={img.id}>Foto {img.ordem} · {img.moderacao}</li>)}</ul> : <p>Nenhuma foto.</p>}
+              {detalhe.imagens.length ? <ul>{detalhe.imagens.map(img => <li key={img.id} className="space-y-2 py-2">
+                <p>Foto {img.ordem} · {img.moderacao}</p>
+                {img.moderacao === "pendente" && <button type="button" disabled={busy} className="rounded border px-3 py-2"
+                  onClick={() => run(async () => {
+                    setBusy(true);
+                    try {
+                      const revisao = await api<{ url: string }>("/api/admin/fotos/" + img.id + "/revisao");
+                      setFoto({ id: img.id, url: revisao.url });
+                    } finally { setBusy(false); }
+                  })}>Solicitar link de revisão</button>}
+                {foto?.id === img.id && <a href={foto.url} target="_blank" rel="noopener noreferrer" className="ml-2 underline">Abrir foto privada (link válido por 60 s)</a>}
+                {(img.moderacao === "pendente" || img.moderacao === "publicado") && <form onSubmit={e => void submit(e, async d => {
+                  const acao = d.get("acao");
+                  if (acao === "aprovar" && (foto?.id !== img.id || d.get("conferida") !== "on")) {
+                    throw new Error("Abra e revise a foto antes de aprovar.");
+                  }
+                  await mutate("/api/admin/imagem", {
+                    imagem_id: img.id, acao,
+                    ...(acao === "aprovar" ? { descricao_publica: d.get("descricao_publica") } : { motivo: d.get("motivo") }),
+                    checklist: { rosto: false, menor: false, placa: false, numero_residencia: false, documento: false, agressao: false },
+                  }, "Moderação da foto concluída.");
+                  setFoto(null);
+                })}>
+                  <fieldset disabled={busy || conflito} className="space-y-2">
+                    {foto?.id === img.id && img.moderacao === "pendente" && <>
+                      <label className="block"><input type="checkbox" name="conferida"/> Revisei a foto. Ela não mostra rostos, menores, placas, números de residência, documentos ou agressão.</label>
+                      <input name="descricao_publica" aria-label="Descrição pública da foto" maxLength={300} className="rounded border p-2"/>
+                      <button name="acao" value="aprovar" className="mx-2 rounded border px-3 py-2">Aprovar foto</button>
+                    </>}
+                    <input name="motivo" aria-label="Motivo para remover a foto" maxLength={1000} className="rounded border p-2"/>
+                    <button name="acao" value="remover" className="mx-2 rounded border px-3 py-2">Remover foto</button>
+                  </fieldset>
+                </form>}
+              </li>)}</ul> : <p>Nenhuma foto.</p>}
             </section>
             {(Object.keys(colecoes) as ColecaoAdmin[]).map(colecao =>
               <ListaColecao key={`${selected.id}:${colecao}`} id={String(selected.id)} colecao={colecao} temItens={detalhe.resumos[`tem_${colecao}`]} onError={setFailure}/>

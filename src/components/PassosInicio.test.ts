@@ -9,7 +9,7 @@ describe("PassosInicio", () => {
  it("é uma lista ordenada com três itens na ordem esperada", () => {
   expect(html.startsWith("<ol")).toBe(true);
   expect(html.match(/<li[ >]/g)).toHaveLength(3);
-  const a = html.indexOf("Escolha sua cidade"), b = html.indexOf("Conte o que aconteceu"), c = html.indexOf("Acompanhe com o protocolo");
+  const a = html.indexOf("Escolha sua cidade"), b = html.indexOf("Conte o que aconteceu"), c = html.indexOf("Guarde o link privado");
   expect(a).toBeGreaterThan(-1);
   expect(a).toBeLessThan(b);
   expect(b).toBeLessThan(c);
@@ -18,8 +18,8 @@ describe("PassosInicio", () => {
  });
  it("traz uma frase curta por etapa", () => {
   expect(html).toContain("Escolha pelo nome ou pelo mapa.");
-  expect(html).toContain("O relato passa por análise antes de ser publicado.");
-  expect(html).toContain("O protocolo ou o link permite acompanhar sem criar conta.");
+  expect(html).toContain("Confira quando o texto ficará público antes de enviar.");
+  expect(html).toContain("Use esse link para acompanhar ou pedir a retirada do relato.");
  });
  it("esconde números e cenas do leitor de tela e não anima", () => {
   expect(html.match(/<svg /g)).toHaveLength(3);

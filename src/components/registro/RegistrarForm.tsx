@@ -14,7 +14,7 @@ import { ETAPAS, validarEtapa, lerRascunho, enviarRegistro } from "./etapas";
 type Opcao = { slug: string; nome: string };
 type Campos = { municipio: string; categoria: string; titulo: string; descricao: string };
 type Tentativa = Campos & { token: string; tokenHash: string; chaveIdempotencia: string };
-type Props = { municipios: Opcao[]; categorias: Opcao[]; siteKey?: string; captchaObrigatorio: boolean; registroDisponivel: boolean; municipioInicial?: string; fotosHabilitadas?: boolean };
+type Props = { municipios: Opcao[]; categorias: Opcao[]; siteKey?: string; captchaObrigatorio: boolean; registroDisponivel: boolean; municipioInicial?: string; fotosHabilitadas?: boolean; publicacaoImediata?: boolean };
 const STORAGE_KEY = "og.registro.m3.v1";
 const DRAFT_KEY = "og.registro.rascunho.v1";
 const VAZIO: Campos = { municipio: "", categoria: "", titulo: "", descricao: "" };
@@ -53,7 +53,8 @@ function mensagens(codigo: string | undefined, status: number): string {
   return "Não conseguimos enviar agora. Seus campos e o link privado continuam salvos neste aparelho. Tente novamente.";
 }
 
-export function RegistrarForm({ municipios, categorias, siteKey, captchaObrigatorio = true, registroDisponivel = false, municipioInicial = "", fotosHabilitadas = false }: Props) {
+export function RegistrarForm({ municipios, categorias, siteKey, captchaObrigatorio = true, registroDisponivel = false, municipioInicial = "", fotosHabilitadas = false, publicacaoImediata = false }: Props) {
+  const [aceitouPublicacao, setAceitouPublicacao] = useState(false);
   const [campos, setCampos] = useState<Campos>({ ...VAZIO, municipio: municipios.some(m => m.slug === municipioInicial) ? municipioInicial : "" });
   const [etapa, setEtapa] = useState(0);
   const [fotos, setFotos] = useState<FotoRegistro[]>([]);
@@ -150,6 +151,7 @@ export function RegistrarForm({ municipios, categorias, siteKey, captchaObrigato
     if (!validar()) return;
     if (etapa >= 3 && fotos.some(f => f.contexto.trim().length < 3)) { setErro("Descreva o que cada foto mostra ou remova a foto antes de continuar."); return; }
     if (etapa < 4) { mudarEtapa(etapa + 1); return; }
+    if (publicacaoImediata && !aceitouPublicacao) { setErro("Confirme que você entende que a publicação é imediata."); return; }
     if (faltaCaptcha) { setErro("Conclua a verificação de segurança antes de enviar."); requestAnimationFrame(() => resumo.current?.focus()); return; }
     setEstado("enviando"); setErro("");
     try {
@@ -160,7 +162,7 @@ export function RegistrarForm({ municipios, categorias, siteKey, captchaObrigato
         localStorage.setItem(STORAGE_KEY, JSON.stringify(tentativaAtual));
         setTentativa(tentativaAtual);
       }
-      const corpo = criarCorpoRegistro({ ...campos, tokenHash: tentativaAtual.tokenHash, chaveIdempotencia: tentativaAtual.chaveIdempotencia, turnstile: captchaObrigatorio ? captcha : undefined });
+      const corpo = criarCorpoRegistro({ ...tentativaAtual, tokenHash: tentativaAtual.tokenHash, chaveIdempotencia: tentativaAtual.chaveIdempotencia, turnstile: captchaObrigatorio ? captcha : undefined, aceite_publicacao_imediata: publicacaoImediata && aceitouPublicacao ? true : undefined });
       const confirmado = await enviarRegistro(corpo);
       setProtocolo(confirmado); setEstado("sucesso"); localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(DRAFT_KEY);
     } catch (falha) {
@@ -254,8 +256,9 @@ export function RegistrarForm({ municipios, categorias, siteKey, captchaObrigato
         </div>
       </fieldset>
       {fotosHabilitadas && etapa === 3 && <EtapaFotos fotos={fotos} mudar={setFotos} aoPreparar={setFotosPreparando} />}
-      {etapa === 4 && <section className="space-y-3"><h3 className="font-bold">Registro anônimo · confira seu relato</h3><p>Não coletamos nome, telefone ou contato. Seu relato será analisado antes de aparecer no site.</p><dl className="space-y-2 break-words"><dt className="font-semibold">Município</dt><dd>{municipios.find(m => m.slug === campos.municipio)?.nome}</dd><dt className="font-semibold">Categoria</dt><dd>{categorias.find(c => c.slug === campos.categoria)?.nome}</dd><dt className="font-semibold">Título</dt><dd>{campos.titulo}</dd><dt className="font-semibold">Descrição</dt><dd className="whitespace-pre-wrap">{campos.descricao}</dd></dl></section>}
-      <p className="rounded-controle bg-neutro-fundo p-4">Não inclua nomes, telefones, documentos ou endereço residencial. Você não precisa informar nome ou contato. Seu relato será analisado antes de aparecer no site.</p>
+      {etapa === 4 && <section className="space-y-3"><h3 className="font-bold">Registro anônimo · confira seu relato</h3><p>Não coletamos nome, telefone ou contato.</p><dl className="space-y-2 break-words"><dt className="font-semibold">Município</dt><dd>{municipios.find(m => m.slug === campos.municipio)?.nome}</dd><dt className="font-semibold">Categoria</dt><dd>{categorias.find(c => c.slug === campos.categoria)?.nome}</dd><dt className="font-semibold">Título</dt><dd>{campos.titulo}</dd><dt className="font-semibold">Descrição</dt><dd className="whitespace-pre-wrap">{campos.descricao}</dd></dl></section>}
+      <p className="rounded-controle bg-neutro-fundo p-4">Não inclua nomes, telefones, documentos ou endereço residencial. {publicacaoImediata ? "O texto fica público ao enviar e outras pessoas podem copiá-lo. Guarde o link privado para pedir a retirada." : "Seu relato será analisado antes de aparecer no site."}</p>
+      {etapa === 4 && publicacaoImediata && <label className="flex items-center gap-3"><input type="checkbox" required checked={aceitouPublicacao} onChange={e => setAceitouPublicacao(e.target.checked)} />Entendo que o texto do relato será publicado imediatamente.</label>}
       <p className="text-sm text-texto-suave">Os dados e a chave da tentativa ficam salvos neste aparelho até o envio ser confirmado. Em aparelho compartilhado, considere isso antes de continuar.</p>
       {captchaObrigatorio && !bloqueado && <div hidden={etapa !== 4} className="min-h-16" aria-label="Verificação de segurança"><div ref={captchaEl} /></div>}
       {etapa > 0 && <button type="button" disabled={estado === "enviando" || fotosPreparando} className="min-h-12 w-full rounded-controle border border-borda px-5 font-semibold" onClick={() => mudarEtapa(etapa - 1)}>Voltar à etapa anterior</button>}

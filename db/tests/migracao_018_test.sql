@@ -49,6 +49,7 @@ begin
  select count(*) into n from public.admin_listar_auditoria(a,u,'mesclar_duplicata',now()-interval '1 day',now()+interval '1 day');
  if n<>1 then raise exception 'filtros auditoria incorretos'; end if;
  perform public.admin_ver_contato(a);
+ if not exists(select 1 from public.historico_moderacao where admin_id=g and ocorrencia_id=a and acao='ver_contato') then raise exception 'leitura de contato sem auditoria'; end if;
  begin perform public.admin_convidar_administrador(gen_random_uuid(),'moderador','Teste'); raise exception 'gestor geriu equipe'; exception when insufficient_privilege then null; end;
  perform public.admin_moderar_ocorrencia(a,'restaurar','Revisão de mescla');
  perform public.admin_moderar_ocorrencia(c,'remover','Exposição identificada','dados_pessoais');

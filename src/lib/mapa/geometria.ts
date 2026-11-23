@@ -39,3 +39,15 @@ export function textoPainel(painel:PainelMunicipio):string {
  if(total===0)return 'Ainda não há relatos publicados neste município.';
  return `${!painel.ativoAcompanhamento?'Ainda não acompanhamos este município. ':''}${total} relatos publicados na plataforma.`;
 }
+
+export function estadoVisualMunicipio(
+  slug: string,
+  selecionado: string,
+  candidato: string | undefined,
+  sobPonteiro: string | undefined,
+): 'selecionado' | 'candidato' | 'hover' | 'padrao' {
+  if (slug === selecionado) return 'selecionado';
+  if (slug === candidato) return 'candidato';
+  if (slug === sobPonteiro) return 'hover';
+  return 'padrao';
+}

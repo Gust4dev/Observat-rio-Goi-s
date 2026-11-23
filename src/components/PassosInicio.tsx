@@ -43,8 +43,8 @@ function CenaProtocolo() {
 
 const passos: { numero: string; titulo: string; texto: string; cena: ReactNode }[] = [
   { numero: "01", titulo: "Escolha sua cidade", texto: "Escolha pelo nome ou pelo mapa.", cena: <CenaMunicipio /> },
-  { numero: "02", titulo: "Conte o que aconteceu", texto: "O relato passa por análise antes de ser publicado.", cena: <CenaRelato /> },
-  { numero: "03", titulo: "Acompanhe com o protocolo", texto: "O protocolo ou o link permite acompanhar sem criar conta.", cena: <CenaProtocolo /> },
+  { numero: "02", titulo: "Conte o que aconteceu", texto: "Confira quando o texto ficará público antes de enviar.", cena: <CenaRelato /> },
+  { numero: "03", titulo: "Guarde o link privado", texto: "Use esse link para acompanhar ou pedir a retirada do relato.", cena: <CenaProtocolo /> },
 ];
 
 /** Passos visuais de "Como funciona": lista semântica de 3 itens; números e cenas são decorativos. */

@@ -36,18 +36,20 @@ export async function POST(request: Request) {
     const entrada = campos.safeParse({ token: form.get("token"), ordem: form.get("ordem"), contexto: form.get("contexto") });
     const foto = form.get("foto");
     if (!entrada.success || !(foto instanceof File)) throw new ErroRegistro("entrada_invalida");
+    if (!foto.size || foto.size > MAX_IMAGEM) throw new ErroRegistro("corpo_grande");
+    const original = Buffer.from(await foto.arrayBuffer());
+    const hashEntrada = createHash("sha256").update(original).digest("hex");
+    // Validate the declared MIME and decode/re-encode the bounded bytes before
+    // making any Supabase RPC. The rate limit and token/slot checks follow.
+    const bytes = await prepararImagem(original, foto.type);
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    await limitarHttp(request, config, "foto");
     const hash = hashSha256(entrada.data.token);
     const [oc] = await rpc("acompanhar_por_token", { p_token_hash: bytea(hash) }, z.array(z.object({ out_moderacao: z.string() })).max(1));
     if (!oc) throw new ErroRegistro("token_invalido");
     if (oc.out_moderacao === "removido") throw new ErroRegistro("conflito");
-    if (!foto.size || foto.size > MAX_IMAGEM) throw new ErroRegistro("corpo_grande");
-    const original = Buffer.from(await foto.arrayBuffer());
-    const hashEntrada = createHash("sha256").update(original).digest("hex");
     const retry = await rpc("consultar_slot_imagem", { p_token_hash: bytea(hash), p_ordem: entrada.data.ordem, p_hash_entrada: hashEntrada, p_contexto: entrada.data.contexto }, z.array(z.object({ out_id: z.uuid() })).max(1));
-    await limitarHttp(request, config, "foto");
     if (retry.length) return respostaPrivada({ confirmacao: "Foto recebida para revisão.", ordem: entrada.data.ordem }, 201);
-    const bytes = await prepararImagem(original, foto.type);
-    const digest = createHash("sha256").update(bytes).digest("hex");
     const caminho = caminhoImagem(hmacSha256(config.hmacSegredo, `foto:${hash}`), entrada.data.ordem, digest);
     const headers = supabaseApiHeaders(config.chave);
     const storage = `${config.base}/storage/v1/object/imagens-quarentena/${caminho}`;

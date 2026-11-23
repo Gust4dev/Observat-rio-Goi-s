@@ -13,12 +13,16 @@ it("descarta campos arbitrários, mensagens de erro e valores inválidos antes d
     banco: "ok",
     duracaoMs: 12,
     token: "secret",
+    contato: "contato-privado@example.test",
+    authorization: "Bearer token-privado",
+    query: "?token=token-privado&contato=contato-privado@example.test",
+    erroSupabase: new Error("Supabase timeout: contato-privado@example.test"),
     error: new Error("pessoa@example.test"),
   } as Parameters<typeof logger.registrar>[1]);
   const record = JSON.parse(output.mock.calls[0][0]);
   expect(record).toMatchObject({ requestId: logger.requestId, metodo: "GET", evento: "saude.verificada", status: 200, banco: "ok", duracaoMs: 12 });
   expect(Object.keys(record).sort()).toEqual(["banco", "duracaoMs", "evento", "metodo", "nivel", "requestId", "status", "timestamp"].sort());
-  expect(JSON.stringify(record)).not.toMatch(/secret|example|token|authorization/);
+  expect(JSON.stringify(record)).not.toMatch(/secret|example|token|authorization|Supabase|timeout/);
   logger.registrar("saude.verificada", { status: "secret", banco: "pessoa@example.test", duracaoMs: Infinity } as never);
   expect(JSON.parse(output.mock.calls[1][0])).not.toHaveProperty("banco");
   expect(JSON.parse(output.mock.calls[1][0])).not.toHaveProperty("status");

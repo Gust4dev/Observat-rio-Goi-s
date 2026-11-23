@@ -31,6 +31,7 @@ export function AcompanharClient() {
   const [relato, setRelato] = useState<Relato | null>(null);
   const [estado, setEstado] = useState<"inicial" | "carregando" | "pronto" | "erro" | "confirmando" | "excluindo" | "excluido">("inicial");
   const [erro, setErro] = useState("");
+  const [limpezaPendente, setLimpezaPendente] = useState(false);
   const hashConsultado = useRef<string | null>(null);
   const [confirmacao, setConfirmacao] = useState(false);
   const titulo = useRef<HTMLHeadingElement>(null);
@@ -70,6 +71,7 @@ export function AcompanharClient() {
       const resposta = await fetch("/api/excluir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: segredo, confirmacao: true }), cache: "no-store", referrerPolicy: "no-referrer" });
       const dados: unknown = await resposta.json().catch(() => null);
       if (!resposta.ok || !dados || typeof dados !== "object" || (dados as { confirmacao?: unknown }).confirmacao !== "Exclusão concluída.") throw new Error();
+      setLimpezaPendente((dados as { limpeza_imagens_pendente?: unknown }).limpeza_imagens_pendente === true);
       setRelato(null); setConfirmacao(false); setEstado("excluido");
       window.history.replaceState(null, "", "/acompanhar");
       requestAnimationFrame(() => titulo.current?.focus());
@@ -84,7 +86,7 @@ export function AcompanharClient() {
     {(estado === "inicial" || estado === "erro") && <div><p>O código só será enviado ao escolher consultar. Após o resultado, abra novamente seu link guardado para atualizar.</p><button disabled={!token} className="mt-4 min-h-12 rounded-controle border border-borda px-4 font-semibold disabled:opacity-60" onClick={() => { if (token) void consultar(token); }}>Consultar acompanhamento</button></div>}
     {estado === "carregando" && <p role="status">Carregando acompanhamento…</p>}
     {estado === "erro" && <div className="rounded-cartao border border-borda bg-neutro-fundo p-5"><h2 ref={titulo} tabIndex={-1}>Acompanhamento</h2><p className="mt-2">{erro}</p>{token && <button className="mt-4 min-h-12 rounded-controle border border-borda px-4 font-semibold" onClick={() => void consultar(token)}>Tentar novamente</button>}</div>}
-    {estado === "excluido" && <div className="rounded-cartao border border-borda bg-sucesso-fundo p-5"><h2 ref={titulo} tabIndex={-1}>Exclusão concluída</h2><p className="mt-2">O texto do relato foi retirado da exibição. O registro de auditoria permanece.</p></div>}
+    {estado === "excluido" && <div className="rounded-cartao border border-borda bg-sucesso-fundo p-5"><h2 ref={titulo} tabIndex={-1}>Relato retirado</h2><p className="mt-2">O texto do relato foi retirado da exibição. O registro de auditoria permanece.</p>{limpezaPendente && <p>A retirada dos arquivos de imagem ainda está pendente.</p>}</div>}
     {(estado === "pronto" || estado === "confirmando" || estado === "excluindo") && relato && <>
       {erro && <p role="alert" className="rounded-controle border border-erro bg-erro-fundo p-4 text-erro">{erro}</p>}
       <div className="rounded-cartao border border-borda bg-superficie p-5">
@@ -110,7 +112,7 @@ export function AcompanharClient() {
         <h3 id="confirmar-exclusao" ref={tituloConfirmacao} tabIndex={-1}>Confirmar exclusão</h3>
         <p className="mt-2">Ao confirmar, o servidor tentará retirar o texto da exibição e substituí-lo por um marcador. Não há promessa de remoção imediata ou de eliminação de todos os registros. O registro de auditoria permanece. Esta ação não pode ser desfeita por este link.</p>
         <label htmlFor="link-exclusao" className="mt-3 block">Cole o link privado guardado para autorizar a exclusão deste relato</label>
-        <form onSubmit={(event) => { event.preventDefault(); void excluir(event.currentTarget); }}>
+        <form method="post" action="/api/excluir" onSubmit={(event) => { event.preventDefault(); void excluir(event.currentTarget); }}>
         <input id="link-exclusao" name="link-privado" type="password" autoComplete="off" required className="mt-2 min-h-12 w-full rounded-controle border border-borda px-3" />
         {estado === "excluindo" ? <p role="status" className="mt-3">Concluindo exclusão…</p> : <div className="mt-4 flex flex-col gap-3 sm:flex-row"><button className="min-h-12 rounded-controle bg-erro px-4 font-semibold text-white" type="submit">Confirmar exclusão</button><button type="button" className="min-h-12 rounded-controle border border-borda px-4 font-semibold" onClick={() => { setConfirmacao(false); setEstado("pronto"); requestAnimationFrame(() => titulo.current?.focus()); }}>Cancelar</button></div>}</form>
       </section>}

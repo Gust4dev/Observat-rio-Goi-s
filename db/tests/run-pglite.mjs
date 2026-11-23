@@ -68,6 +68,10 @@ console.log('ok    migracao_023_test.sql');
 await db.exec(await ler('../024_auditoria_anonymizacao_admin.sql'));
 await db.exec(await ler('migracao_024_test.sql'));
 console.log('ok    migracao_024_test.sql');
+await db.exec(await ler('../025_escala_fila_admin.sql'));
+await db.exec(await ler('../026_fila_pos_publicacao.sql'));
+await db.exec(await ler('migracao_026_test.sql'));
+console.log('ok    migracao_026_test.sql');
 try {
   const n = await verificarColunasViews(db, path.join(dir, '../colunas-publicas.json'));
   console.log('ok   ', 'colunas-views (' + n + ' views)');

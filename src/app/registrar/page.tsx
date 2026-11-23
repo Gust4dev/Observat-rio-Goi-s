@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { listarCategorias, listarMunicipios } from "@/lib/dados/consultas";
 import { configServidor } from "@/lib/registro/servidor";
+import { publicacaoTextoImediata } from "@/lib/registro/staging";
 import { RegistrarForm, SemJavaScript } from "@/components/registro/RegistrarForm";
 
 export const metadata: Metadata = {
@@ -36,7 +37,7 @@ async function FormularioRegistroRuntime({ searchParams }: { searchParams: Consu
   } catch {
     registroDisponivel = false;
   }
-  return <RegistrarForm municipioInicial={municipioInicial} municipios={municipios} categorias={categorias} siteKey={siteKey} captchaObrigatorio={captchaObrigatorio} registroDisponivel={registroDisponivel} fotosHabilitadas={fotosHabilitadas} />;
+  return <RegistrarForm municipioInicial={municipioInicial} municipios={municipios} categorias={categorias} siteKey={siteKey} captchaObrigatorio={captchaObrigatorio} registroDisponivel={registroDisponivel} fotosHabilitadas={fotosHabilitadas} publicacaoImediata={publicacaoTextoImediata()} />;
 }
 
 export default function RegistrarPage({ searchParams }: { searchParams: Consulta }) {
@@ -44,7 +45,7 @@ export default function RegistrarPage({ searchParams }: { searchParams: Consulta
     <Link href="/" className="inline-flex min-h-12 items-center font-semibold underline">Voltar ao início</Link>
     <header>
       <h1>Registrar um problema</h1>
-      <p className="mt-2 text-texto-suave">Sem conta e sem contato. Os relatos são analisados antes de aparecer no site.</p>
+      <p className="mt-2 text-texto-suave">Sem conta e sem contato. Confira as condições de publicação antes de enviar.</p>
     </header>
     <SemJavaScript />
     <Suspense fallback={<p role="status" aria-busy="true">Verificando disponibilidade do registro…</p>}>

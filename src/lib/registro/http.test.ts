@@ -4,6 +4,9 @@ import { POST as acompanhar } from "../../app/api/acompanhar/route";
 import { POST as excluir } from "../../app/api/excluir/route";
 import { resolverReferencia } from "./http";
 import { configServidor } from "./servidor";
+import { revalidateTag } from "next/cache";
+
+vi.mock("next/cache", () => ({ revalidateTag: vi.fn() }));
 
 const token = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 const entrada = { municipio: "anapolis", categoria: "saude", titulo: "Posto sem atendimento", descricao: "O posto está sem atendimento desde a semana passada.", token_hash: "a".repeat(64), chave_idempotencia: "7419b75e-86a9-4e4a-8a1a-9fb13f701a1e", turnstile: "captcha-teste" };
@@ -43,6 +46,72 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("registro HTTP", () => {
+  it("retira somente os caminhos de Storage retornados para o titular", async () => {
+    const privado = `${"a".repeat(64)}/1/${"b".repeat(64)}.jpg`;
+    const publico = `${dados.out_id}.jpg`;
+    const original = globalThis.fetch;
+    const deletados: string[] = [];
+    vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("solicitar_exclusao_por_token")) return Response.json([privado, publico, publico]);
+      if (init?.method === "DELETE") { deletados.push(url); return new Response(null, { status: 404 }); }
+      return original(input, init);
+    });
+    expect((await excluir(request({ token, confirmacao: true }, {}, "excluir"))).status).toBe(200);
+    expect(deletados).toEqual([
+      `https://db.example/storage/v1/object/imagens-quarentena/${privado}`,
+      `https://db.example/storage/v1/object/imagens-publicas/${publico}`,
+    ]);
+    expect(revalidateTag).toHaveBeenCalledWith("problemas", { expire: 0 });
+  });
+  it("reporta limpeza pendente sem repetir a exclusão do relato quando o Storage falha", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const original = globalThis.fetch;
+    vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).endsWith("solicitar_exclusao_por_token")) return Response.json([`${dados.out_id}.jpg`]);
+      if (init?.method === "DELETE") return new Response(null, { status: 503 });
+      return original(input, init);
+    });
+    const resposta = await excluir(request({ token, confirmacao: true }, {}, "excluir"));
+    expect(resposta.status).toBe(200);
+    expect(await resposta.json()).toEqual({ confirmacao: "Exclusão concluída.", limpeza_imagens_pendente: true });
+    expect(console.warn).toHaveBeenCalledWith('{"evento":"limpeza_imagens_titular_pendente"}');
+  });
+
+  it("publica em Production com origem aprovada e aceite explícito", async () => {
+    const ref = "abcdefghijklmnopqrst";
+    for (const [nome, valor] of Object.entries({
+      NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "production",
+      AMBIENTE_REGISTRO: "production", BETA_REGISTRO_TEXTUAL_ATIVA: "true",
+      BETA_REGISTRO_PROTEGIDA_VERCEL: "true", PUBLICACAO_IMEDIATA_RELATOS: "true",
+      SUPABASE_PRODUCTION_DATA_APPROVED: "true", SUPABASE_PRODUCTION_PROJECT_REF: ref,
+      NEXT_PUBLIC_SUPABASE_URL: `https://${ref}.supabase.co`, MODO_PUBLICACAO: "moderar_tudo", FOTOS_HABILITADAS: "false",
+    })) vi.stubEnv(nome, valor);
+    const headers = { "x-forwarded-for": "192.0.2.1" };
+    expect((await registrar(request(entrada, headers))).status).toBe(422);
+    expect(chamadas).toHaveLength(0);
+    expect((await registrar(request({ ...entrada, aceite_publicacao_imediata: true }, headers))).status).toBe(201);
+    expect(chamadas.find(c => c.url.endsWith("registrar_ocorrencia"))?.body.p_moderacao).toBe("publicado");
+    expect(revalidateTag).toHaveBeenCalledWith("problemas", { expire: 0 });
+  });
+  it("mantém acompanhamento e retirada disponíveis sem Turnstile quando o cadastro está fechado em Production", async () => {
+    const ref = "abcdefghijklmnopqrst";
+    for (const [nome, valor] of Object.entries({
+      NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "production",
+      AMBIENTE_REGISTRO: "production", BETA_REGISTRO_TEXTUAL_ATIVA: "false",
+      SUPABASE_PRODUCTION_DATA_APPROVED: "true", SUPABASE_PRODUCTION_PROJECT_REF: ref,
+      NEXT_PUBLIC_SUPABASE_URL: `https://${ref}.supabase.co`,
+      TURNSTILE_SECRET: "", NEXT_PUBLIC_TURNSTILE_SITE_KEY: "",
+    })) vi.stubEnv(nome, valor);
+    const headers = { "x-forwarded-for": "192.0.2.1" };
+    expect((await acompanhar(request({ token }, headers, "acompanhar"))).status).toBe(200);
+    expect((await excluir(request({ token, confirmacao: true }, headers, "excluir"))).status).toBe(200);
+    expect(chamadas.some(c => c.url.includes("siteverify"))).toBe(false);
+    chamadas = [];
+    vi.stubEnv("SUPABASE_PRODUCTION_DATA_APPROVED", "false");
+    expect((await excluir(request({ token, confirmacao: true }, headers, "excluir"))).status).toBe(503);
+    expect(chamadas).toHaveLength(0);
+  });
   it("registra anônimo e devolve somente protocolo e confirmação sem cache", async () => {
     const r = await registrar(request()); expect(r.status).toBe(201); expect(await r.json()).toEqual({ protocolo: dados.out_protocolo, confirmacao: "Relato recebido." }); expect(r.headers.get("cache-control")).toBe("no-store");
     const rpc = chamadas.find(c => c.url.endsWith("registrar_ocorrencia"))!;

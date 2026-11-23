@@ -1,5 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
+
+vi.mock("next/navigation", async original => ({
+  ...await original<typeof import("next/navigation")>(),
+  useRouter: () => ({ refresh: () => {} }),
+}));
+
+afterEach(() => vi.unstubAllEnvs());
 
 vi.mock("@/lib/dados/consultas", () => ({
   obterProblema: vi.fn(async () => ({
@@ -35,4 +42,25 @@ it("mantém as duas ações adiadas inativas e explica privacidade e limites da 
   expect(html).toContain("A contagem não mede gravidade nem quantidade total de pessoas afetadas.");
   expect(html).not.toContain("/api/afeta");
   expect(html).not.toContain("/api/denunciar");
+});
+
+it("exibe as três ações no detalhe da beta protegida com formulários POST", async () => {
+  const ref = "abcdefghijklmnopqrst";
+  for (const [nome, valor] of Object.entries({
+    NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "production",
+    AMBIENTE_REGISTRO: "production", BETA_REGISTRO_TEXTUAL_ATIVA: "true",
+    BETA_REGISTRO_PROTEGIDA_VERCEL: "true", BETA_PARTICIPACAO_PROTEGIDA_VERCEL: "true",
+    SUPABASE_PRODUCTION_DATA_APPROVED: "true", SUPABASE_PRODUCTION_PROJECT_REF: ref,
+    NEXT_PUBLIC_SUPABASE_URL: `https://${ref}.supabase.co`, FOTOS_HABILITADAS: "false",
+    MODO_PUBLICACAO: "moderar_tudo", AFETA_HABILITADO: "true",
+  })) vi.stubEnv(nome, valor);
+  const html = renderToStaticMarkup(await Pagina({
+    params: Promise.resolve({ id: "11111111-1111-4111-8111-111111111111" }),
+    searchParams: Promise.resolve({}),
+  }));
+  expect(html).toContain('>Também me afeta</button>');
+  expect(html).toContain('action="/api/denunciar"');
+  expect(html).toContain('action="/api/resposta"');
+  expect(html.match(/method="post"/g)).toHaveLength(2);
+  expect(html).not.toContain("ações aguardam implementação");
 });

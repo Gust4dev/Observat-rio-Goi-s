@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+afterEach(() => vi.unstubAllEnvs());
 const dados = vi.hoisted(() => ({ indicadores: vi.fn(), recentes: vi.fn(), municipio: vi.fn() }));
 beforeEach(() => { dados.indicadores.mockResolvedValue(null); dados.recentes.mockResolvedValue([]); dados.municipio.mockReset(); dados.municipio.mockResolvedValue({slug:"goiania",nome:"Goiânia",total:3,ativo_acompanhamento:true}); });
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {} }) }));
@@ -15,7 +16,12 @@ describe("home sem JavaScript", () => {
   expect(html).toContain('value="goiania" selected=""');
   expect(html).toContain('method="get"');
   expect(html).toContain("3 relatos publicados na plataforma");
-  expect(html.indexOf("Registrar um problema")).toBeLessThan(html.indexOf('<select '));
+  expect(html).toContain("Goiás, visto de perto.");
+  expect(html).toContain("Encontre sua cidade, consulte relatos públicos e acompanhe as atualizações.");
+  expect(html).toContain("246 municípios");
+  expect(html).not.toContain("2 formas de selecionar");
+  expect(html.indexOf('aria-label="Painel de seleção do município"')).toBeLessThan(html.indexOf('aria-label="Mapa interativo de Goiás"'));
+  expect(html.indexOf('<select ')).toBeLessThan(html.indexOf('aria-label="Mapa interativo de Goiás"'));
   expect(html.indexOf("Registrar um problema")).toBeLessThan(html.indexOf('<img '));
  });
  it("ignora seleção desconhecida e mantém ações sem dados", async () => {
@@ -33,6 +39,19 @@ describe("home sem JavaScript", () => {
   expect(html).toContain("Dados indisponíveis");
   expect(html).not.toContain("0 relatos publicados");
   expect(html).toContain('href="/registrar?municipio=goiania"');
+ });
+ it("distingue falha de leitura de uma lista vazia", async () => {
+  dados.recentes.mockRejectedValueOnce(new Error("rede indisponível"));
+  const html = renderToStaticMarkup(await HomeConteudo({searchParams:Promise.resolve({})}));
+  expect(html).toContain("Relatos recentes indisponíveis no momento");
+  expect(html).not.toContain("Ainda não há relatos publicados");
+ });
+ it("mostra relatos da Production sem selo demonstrativo", async () => {
+  vi.stubEnv("VERCEL_ENV", "production");
+  dados.recentes.mockResolvedValueOnce([{id:"00000000-0000-4000-8000-000000000001",titulo:"Relato público",municipio_slug:"goiania",municipio_nome:"Goiânia",categoria_slug:"outros",categoria_nome:"Outros",situacao:"registrado",publicado_em:"2026-10-20T12:00:00Z",tem_resposta_oficial:false}]);
+  const html = renderToStaticMarkup(await HomeConteudo({searchParams:Promise.resolve({})}));
+  expect(html).toContain("Relato público");
+  expect(html).not.toContain("Dados de demonstração");
  });
 });
 
@@ -57,6 +76,6 @@ it("mostra cinco relatos recentes com categoria e rótulos demonstrativos, antes
  expect(html).toContain("Ver todos os relatos");
  expect(html).not.toContain("list-decimal");
  expect(html.indexOf("Relatos recentes")).toBeLessThan(html.indexOf("Como funciona"));
- expect(html.indexOf("Registrar um problema")).toBeLessThan(html.indexOf("Explore seu município"));
+ expect(html.indexOf("Explore seu município")).toBeLessThan(html.indexOf("Registrar um problema"));
  expect(html.indexOf("Explore seu município")).toBeLessThan(html.indexOf("Números da plataforma"));
 });

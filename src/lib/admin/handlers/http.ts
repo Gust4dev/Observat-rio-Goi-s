@@ -51,6 +51,11 @@ function config() {
 async function chamar(token: string, path: string, data?: unknown, service = false) {
   const c = config(); const key = service ? resolveSupabaseKeys(process.env).secretKey : c.key;
   if (!key) throw new Falha(503);
+  const suprimirEmailDeTeste = process.env.E2E_SUPPRESS_SMTP === "true"
+    && process.env.VERCEL_ENV === "preview"
+    && process.env.AMBIENTE_REGISTRO === "staging_ficticio"
+    && process.env.MODO_PUBLICACAO === "moderar_tudo";
+  if (service && path === "/auth/v1/invite" && suprimirEmailDeTeste) throw new SmtpIndisponivel();
   const result = await fetch(c.base + path, { method: data === undefined ? "GET" : "POST", cache: "no-store", signal: AbortSignal.timeout(10000), headers: { ...supabaseApiHeaders(key, service ? undefined : token), "Content-Type": "application/json" }, ...(data === undefined ? {} : { body: JSON.stringify(data) }) });
   if (!result.ok) {
     const error = await result.json().catch(() => ({}));
@@ -93,6 +98,27 @@ function seguro(value: unknown): unknown {
   return value;
 }
 function invalidar() { for (const tag of ["problemas", "municipios", "indicadores"]) revalidateTag(tag, { expire: 0 }); }
+async function purgarImagensDoRelato(dados: unknown): Promise<boolean> {
+  const objetoPublico = z.string().regex(/^[a-f0-9-]{36}\.jpg$/).refine(caminho => uuid.safeParse(caminho.slice(0, -4)).success);
+  const caminhos = z.array(z.union([z.string().refine(caminhoImagemValido), objetoPublico])).max(6).safeParse(dados);
+  if (!caminhos.success) return false;
+  if (!caminhos.data.length) return true;
+  const chave = resolveSupabaseKeys(process.env).secretKey;
+  if (!chave) return false;
+  const { base } = config();
+  const resultados = await Promise.allSettled(caminhos.data.map(async caminho => {
+    const bucket = caminhoImagemValido(caminho) ? "imagens-quarentena" : "imagens-publicas";
+    const resposta = await fetch(base + "/storage/v1/object/" + bucket + "/" + caminho, {
+      method: "DELETE",
+      headers: supabaseApiHeaders(chave),
+      signal: AbortSignal.timeout(5000),
+      redirect: "error",
+      cache: "no-store",
+    });
+    return resposta.ok || resposta.status === 404;
+  }));
+  return resultados.every(resultado => resultado.status === "fulfilled" && resultado.value);
+}
 function assinaturaCursor(payload: string) {
   const secret = process.env.HMAC_SEGREDO;
   if (!secret || Buffer.byteLength(secret) < 32) throw new Falha(503);
@@ -198,7 +224,16 @@ export async function handleAdmin(req: Request, action: string, rawId?: string) 
     else if (action === "contato") data = await rpc(token, "admin_ver_contato", { p_id: id });
     else if (action === "moderar") {
       const b = await entrada(req, moderar); if (b.acao === "restaurar" && admin.papel === "moderador") throw new Falha(403);
-      await rpc(token, "admin_moderar_ocorrencia", { p_id: id, p_acao: b.acao, p_motivo: b.motivo ?? null, p_motivo_codigo: b.motivo_codigo ?? null, p_versao_esperada: b.versao_esperada }); invalidar(); data = { ok: true };
+      const args = { p_id: id, p_motivo: b.motivo ?? null, p_motivo_codigo: b.motivo_codigo ?? null, p_versao_esperada: b.versao_esperada };
+      if (b.acao === "remover") {
+        const caminhos = await rpc(token, "admin_remover_ocorrencia_com_imagens", args);
+        invalidar();
+        data = await purgarImagensDoRelato(caminhos) ? { ok: true } : { ok: true, limpeza_pendente: true };
+      } else {
+        await rpc(token, "admin_moderar_ocorrencia", { ...args, p_acao: b.acao });
+        invalidar();
+        data = { ok: true };
+      }
     } else if (action === "lote") {
       const b = await entrada(req, z.strictObject({ ids: z.array(uuid).min(1).max(50).refine(a => new Set(a).size === a.length), versoes_esperadas: z.array(versao).min(1).max(50), acao: z.enum(["aprovar", "reter"]), motivo: motivo.optional() }).refine(v => v.ids.length === v.versoes_esperadas.length && (v.acao === "aprovar" || !!v.motivo)));
       data = await rpc(token, "admin_moderar_lote", { p_ids: b.ids, p_versoes_esperadas: b.versoes_esperadas, p_acao: b.acao, p_motivo: b.motivo ?? null }); invalidar();

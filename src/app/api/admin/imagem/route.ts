@@ -75,8 +75,17 @@ export async function POST(request:Request){
   }catch(erro){
    // A resposta da RPC pode ter se perdido depois do commit. Nunca apagar uma aprovação confirmada.
    if(copiada){
-    try{const atual=await chamar(config.base,`/rest/v1/imagens?${new URLSearchParams({select:"moderacao,operacao_admin_id",id:`eq.${dados.imagem_id}`})}`,usuarioHeaders);const estado=atual.ok?z.array(z.object({moderacao:z.string(),operacao_admin_id:z.uuid().nullable()})).length(1).safeParse(await atual.json()):null;
-     if(estado?.success&&estado.data[0].moderacao!=="publicado"&&estado.data[0].operacao_admin_id===operacao.out_operacao){await apagar(publico);await abandonar();}
+    try {
+     const atual = await chamar(config.base, `/rest/v1/imagens?${new URLSearchParams({select:"moderacao,operacao_admin_id",id:`eq.${dados.imagem_id}`})}`, usuarioHeaders);
+     const estado = atual.ok ? z.array(z.object({moderacao:z.string(),operacao_admin_id:z.uuid().nullable()})).max(1).safeParse(await atual.json()) : null;
+     if (estado?.success) {
+      const imagem = estado.data[0];
+      if (!imagem || imagem.moderacao === "removido") await apagar(publico);
+      else if (imagem.moderacao !== "publicado" && imagem.operacao_admin_id === operacao.out_operacao) {
+       await apagar(publico);
+       await abandonar();
+      }
+     }
     }catch{/* lease expira; reconciliação conserva a linha e apaga cópia órfã depois da margem. */}
    }else if(dados.acao==="remover"){
     // Remoção é confirmada no banco antes do Storage. Se a resposta se perder,

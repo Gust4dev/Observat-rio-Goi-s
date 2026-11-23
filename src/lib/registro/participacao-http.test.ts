@@ -32,6 +32,29 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
+it("aceita denúncia na Production protegida sem configuração Turnstile e mantém limite", async () => {
+  const ref = "abcdefghijklmnopqrst";
+  for (const [nome, valor] of Object.entries({
+    NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "production",
+    AMBIENTE_REGISTRO: "production", BETA_REGISTRO_TEXTUAL_ATIVA: "true",
+    BETA_REGISTRO_PROTEGIDA_VERCEL: "true", BETA_PARTICIPACAO_PROTEGIDA_VERCEL: "true",
+    SUPABASE_PRODUCTION_DATA_APPROVED: "true", SUPABASE_PRODUCTION_PROJECT_REF: ref,
+    NEXT_PUBLIC_SUPABASE_URL: `https://${ref}.supabase.co`, FOTOS_HABILITADAS: "false",
+    TURNSTILE_SECRET: "", NEXT_PUBLIC_TURNSTILE_SITE_KEY: "",
+  })) vi.stubEnv(nome, valor);
+  const { ocorrencia_id, motivo, texto } = denuncia;
+  const nova = () => {
+    const req = request({ ocorrencia_id, motivo, texto });
+    req.headers.set("x-forwarded-for", "192.0.2.1");
+    return req;
+  };
+  expect((await denunciar(nova())).status).toBe(202);
+  expect(chamadas.some(c => c.url.endsWith("siteverify"))).toBe(false);
+  expect(chamadas.some(c => c.url.endsWith("registrar_denuncia"))).toBe(true);
+  limite = false;
+  expect((await denunciar(nova())).status).toBe(429);
+});
+
 describe.each([{ nome: "denunciar", post: denunciar, entrada: denuncia, rpc: "registrar_denuncia", env: "LIMITE_DENUNCIA_MAXIMO" }, { nome: "resposta", post: responder, entrada: resposta, rpc: "registrar_resposta", env: "LIMITE_RESPOSTA_MAXIMO" }])("participação pública: $nome", ({ post, entrada, rpc, env }) => {
   it("confirma de modo uniforme sem revelar existência nem conteúdo privado", async () => {
     const a = await post(request(entrada)); retorno = false; const b = await post(request(entrada));
@@ -54,6 +77,39 @@ describe.each([{ nome: "denunciar", post: denunciar, entrada: denuncia, rpc: "re
     expect((await post(request("x".repeat(25000)))).status).toBe(413);
     for (const body of [{ ...entrada, status: "publicada" }, { ...entrada, ocorrencia_id: "inexistente" }, { ...entrada, texto: "\u202eoculto" }, { ...entrada, texto: "" }]) expect((await post(request(body))).status).toBe(422);
     expect(chamadas).toHaveLength(0);
+  });
+  it("rejeita UTF-8 inválido, enum desconhecido e strings excessivas antes da rede", async () => {
+    const bytes = new Uint8Array([0x7b, 0x22, 0x78, 0x22, 0x3a, 0x22, 0xc3, 0x28, 0x22, 0x7d]);
+    const invalida = new Request("https://localhost/api/participacao", { method: "POST", headers: { origin: "https://localhost", "content-type": "application/json" }, body: bytes });
+    expect((await post(invalida)).status).toBe(400);
+    const invalido = post === denunciar ? { ...entrada, motivo: "publicar" } : { ...entrada, texto: "x".repeat(4001) };
+    expect((await post(request(invalido))).status).toBe(422);
+    if (post === denunciar) expect((await post(request({ ...entrada, texto: "x".repeat(1001) }))).status).toBe(422);
+    expect(chamadas).toHaveLength(0);
+  });
+  it("recusa Origin ausente e Fetch Metadata cross-site antes de consultar o banco", async () => {
+    const semOrigem = request(entrada); semOrigem.headers.delete("origin");
+    expect((await post(semOrigem)).status).toBe(403);
+    const crossSite = request(entrada); crossSite.headers.set("sec-fetch-site", "cross-site");
+    expect((await post(crossSite)).status).toBe(403);
+    expect(chamadas).toHaveLength(0);
+  });
+  it("falha fechado quando Turnstile ou rate limit não respondem", async () => {
+    const fetchOriginal = globalThis.fetch;
+    vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).includes("siteverify")) throw new Error("captcha secreto");
+      return fetchOriginal(input, init);
+    });
+    expect((await post(request(entrada))).status).toBe(503);
+    expect(chamadas.some(c => c.url.endsWith(rpc))).toBe(false);
+
+    vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).endsWith("consumir_limite")) return Response.json({ message: "contato privado" }, { status: 503 });
+      return fetchOriginal(input, init);
+    });
+    expect((await post(request(entrada))).status).toBe(503);
+    expect(chamadas.some(c => c.url.endsWith(rpc))).toBe(false);
+    expect(vi.mocked(console.error).mock.calls.flat().join()).not.toMatch(/captcha secreto|contato privado/);
   });
   it("exige staging fictício e moderação antes da rede", async () => {
     vi.stubEnv("AMBIENTE_REGISTRO", "production"); expect((await post(request(entrada))).status).toBe(503);
@@ -105,6 +161,25 @@ it("envia contato apenas ao RPC de resposta e não aceita decisões de publicaç
   expect(enviada).toMatchObject({ p_ocorrencia_id: id, p_vinculo: resposta.vinculo, p_contato: resposta.contato, p_texto: resposta.texto });
   expect(enviada.p_origem_hash).toMatch(/^\\x[a-f0-9]{64}$/);
 });
-it.each(["", "false", "true"])("afeta permanece fechado sem mecanismo aprovado, flag %s", async flag => {
+it.each(["", "false"])("afeta permanece fechado quando a flag é %s", async flag => {
   vi.stubEnv("AFETA_HABILITADO", flag); expect((await afeta(request({ ocorrencia_id: id, turnstile: "teste" }))).status).toBe(503); expect(chamadas).toHaveLength(0);
+});
+
+it("usa uma chave de confirmação estável sem diferenciar repetição", async () => {
+  vi.stubEnv("AFETA_HABILITADO", "true");
+  vi.stubEnv("LIMITE_AFETA_MAXIMO", "5");
+  const original = globalThis.fetch;
+  const chaves: string[] = [];
+  vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+    if (String(input).endsWith("registrar_confirmacao")) {
+      chaves.push(JSON.parse(String(init?.body)).p_chave_hash);
+      return Response.json(false);
+    }
+    return original(input, init);
+  });
+  const corpo = { ocorrencia_id: id, turnstile: "teste" };
+  expect((await afeta(request(corpo))).status).toBe(202);
+  expect((await afeta(request(corpo))).status).toBe(202);
+  expect(chaves).toHaveLength(2);
+  expect(chaves[0]).toBe(chaves[1]);
 });

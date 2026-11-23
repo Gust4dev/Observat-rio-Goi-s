@@ -12,9 +12,23 @@ function network(role = "moderador", result: unknown = null, aal = "aal2") {
 beforeEach(() => { vi.stubEnv("LIMITE_ADMIN_MAXIMO", "60"); vi.stubEnv("LIMITE_ADMIN_JANELA_SEGUNDOS", "60"); vi.stubEnv("HMAC_SEGREDO", "h".repeat(32)); vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://db.example"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test"); vi.stubEnv("SUPABASE_SECRET_KEY", "sb_secret_service"); vi.spyOn(console,"info").mockImplementation(() => {}); vi.spyOn(console,"error").mockImplementation(() => {}); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 it("uses the verified user JWT for atomic moderation and private headers", async () => {
- const { f, request } = network(); const r = await handleAdmin(request({ acao: "remover", motivo_codigo: "spam", motivo: "Confirmado", versao_esperada: 1 }), "moderar", id);
- expect(r.status).toBe(200); expect(f.mock.calls[2][0]).toContain("rpc/admin_moderar_ocorrencia"); expect(f.mock.calls[2][1].headers.Authorization).toBe(`Bearer ${token()}`); expect(JSON.parse(f.mock.calls[2][1].body)).toEqual({ p_id: id, p_acao: "remover", p_motivo_codigo: "spam", p_motivo: "Confirmado", p_versao_esperada: 1 });
+ const caminho = `${"a".repeat(64)}/1/${"b".repeat(64)}.jpg`;
+ const { f, request } = network("moderador", [`${id}.jpg`, caminho]);
+ const r = await handleAdmin(request({ acao: "remover", motivo_codigo: "spam", motivo: "Confirmado", versao_esperada: 1 }), "moderar", id);
+ expect(r.status).toBe(200); expect(f.mock.calls[2][0]).toContain("rpc/admin_remover_ocorrencia_com_imagens"); expect(f.mock.calls[2][1].headers.Authorization).toBe(`Bearer ${token()}`); expect(JSON.parse(f.mock.calls[2][1].body)).toEqual({ p_id: id, p_motivo_codigo: "spam", p_motivo: "Confirmado", p_versao_esperada: 1 });
+ expect(f.mock.calls.slice(3).map(([url, init]) => [new URL(url).pathname, init.method])).toEqual([
+   [`/storage/v1/object/imagens-publicas/${id}.jpg`, "DELETE"],
+   [`/storage/v1/object/imagens-quarentena/${caminho}`, "DELETE"],
+ ]);
+ expect(await r.json()).toEqual({ ok: true });
  expect(r.headers.get("cache-control")).toBe("no-store"); expect(r.headers.get("x-request-id")).toBeTruthy(); expect(r.headers.get("referrer-policy")).toBe("no-referrer");
+});
+it("confirms moderation while reporting that automatic Storage cleanup is pending", async () => {
+ const { f, request } = network();
+ f.mockResolvedValueOnce(Response.json([`${id}.jpg`])).mockResolvedValueOnce(new Response(null, { status: 503 }));
+ const r = await handleAdmin(request({ acao: "remover", motivo_codigo: "spam", motivo: "Confirmado", versao_esperada: 1 }), "moderar", id);
+ expect(r.status).toBe(200);
+ expect(await r.json()).toEqual({ ok: true, limpeza_pendente: true });
 });
 it.each(["fila", "detalhe", "contato", "moderar", "lote", "mesclar", "situacao", "atualizacao", "denuncias", "respostas", "resolver-denuncia", "revisar-resposta", "auditoria", "foto", "equipe", "equipe-convidar", "equipe-papel", "equipe-desativar"])("rejects unauthenticated %s", async action => {
  const f = vi.fn(); vi.stubGlobal("fetch", f); expect([401,403]).toContain((await handleAdmin(req(undefined,false), action, id)).status); expect(f).not.toHaveBeenCalled();
@@ -137,6 +151,22 @@ it("reloads one selected report by its exact bigint identifier", async () => {
 });
 it("sends SMTP invite without returning a capability when delivery works",async()=>{
  const n=network("superadmin");n.f.mockResolvedValueOnce(Response.json({id})).mockResolvedValueOnce(new Response(null,{status:204}));const r=await handleAdmin(n.request({email:"new@example.com",papel:"gestor",motivo:"Equipe"}),"equipe-convidar");expect(r.status).toBe(200);expect(await r.json()).toEqual({user_id:id,convite_enviado:true});expect(n.f.mock.calls).toHaveLength(4);
+});
+it("suppresses SMTP in the fictional Preview profile and generates a non-sent invite link",async()=>{
+ vi.stubEnv("E2E_SUPPRESS_SMTP","true");vi.stubEnv("VERCEL_ENV","preview");vi.stubEnv("AMBIENTE_REGISTRO","staging_ficticio");vi.stubEnv("MODO_PUBLICACAO","moderar_tudo");
+ const n=network("superadmin");n.f.mockReset().mockResolvedValueOnce(Response.json({id})).mockResolvedValueOnce(Response.json([{user_id:id,papel:"superadmin",ativo:true}])).mockResolvedValueOnce(Response.json({user:{id},properties:{action_link:"https://db.example/auth/v1/verify?token=fixture"}})).mockResolvedValueOnce(new Response(null,{status:204}));
+ const r=await handleAdmin(n.request({email:"e2e@example.com",papel:"moderador",motivo:"Convite fictício capturado."}),"equipe-convidar");
+ expect(r.status).toBe(200);expect(await r.json()).toEqual({user_id:id,link_convite:"https://db.example/auth/v1/verify?token=fixture"});
+ expect(n.f.mock.calls.some(([url])=>String(url).includes("/auth/v1/invite"))).toBe(false);
+ expect(n.f.mock.calls.some(([url])=>String(url).includes("/auth/v1/admin/generate_link"))).toBe(true);
+});
+it("does not activate SMTP suppression outside the fictional Preview profile",async()=>{
+ vi.stubEnv("E2E_SUPPRESS_SMTP","true");vi.stubEnv("VERCEL_ENV","production");vi.stubEnv("AMBIENTE_REGISTRO","production");vi.stubEnv("MODO_PUBLICACAO","moderar_tudo");
+ const n=network("superadmin");n.f.mockReset().mockResolvedValueOnce(Response.json({id})).mockResolvedValueOnce(Response.json([{user_id:id,papel:"superadmin",ativo:true}])).mockResolvedValueOnce(Response.json({id})).mockResolvedValueOnce(new Response(null,{status:204}));
+ const r=await handleAdmin(n.request({email:"e2e@example.invalid",papel:"moderador",motivo:"Convite fictício."}),"equipe-convidar");
+ expect(r.status).toBe(200);expect(await r.json()).toEqual({user_id:id,convite_enviado:true});
+ expect(n.f.mock.calls.some(([url])=>String(url).includes("/auth/v1/invite"))).toBe(true);
+ expect(n.f.mock.calls.some(([url])=>String(url).includes("/auth/v1/admin/generate_link"))).toBe(false);
 });
 it("expired quarantine paths are unavailable while admin detail remains readable",async()=>{
  let n=network("moderador",[{caminho_storage:null,moderacao:"retido"}]);expect((await handleAdmin(n.request(),"foto",id)).status).toBe(404);expect(n.f.mock.calls).toHaveLength(3);

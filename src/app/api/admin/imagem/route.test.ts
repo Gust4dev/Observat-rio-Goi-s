@@ -35,6 +35,12 @@ it("falha de delete mantém erro genérico e permite retry",async()=>{failDelete
 
 it("compensa upload com resposta perdida e GET público fica indisponível",async()=>{uploadLost=true;expect((await post(aprovar())).status).toBe(503);const get=await fetch(`https://test.supabase.co/storage/v1/object/imagens-publicas/${id}.jpg`);expect(get.status).toBe(404);});
 it("preserva cópia quando a resposta da RPC se perde depois do commit",async()=>{rpcCommitted=true;expect((await post(aprovar())).status).toBe(503);expect(publicExists).toBe(true);expect(calls.some(c=>c.init?.method==="DELETE")).toBe(false);});
+it("apaga a cópia que chegou ao Storage durante a retirada do relato",async()=>{
+ rpcCommitted=true;rpcCommittedAction="remover";
+ expect((await post(aprovar())).status).toBe(503);
+ expect(publicExists).toBe(false);
+ expect(calls.filter(c=>c.init?.method==="DELETE"&&c.url.includes("imagens-publicas"))).toHaveLength(1);
+});
 it("conclui a purga se a resposta da remoção se perde depois do commit",async()=>{rpcCommitted=true;rpcCommittedAction="remover";const body={imagem_id:id,acao:"remover",motivo:"Retirada fictícia",checklist};expect((await post(body)).status).toBe(200);expect(calls.filter(c=>c.init?.method==="DELETE")).toHaveLength(2);expect(revalidate).toHaveBeenCalledExactlyOnceWith("problemas",{expire:0});});
 it("aceita cookie administrativo com Basic Auth do staging e CSRF",async()=>{const {POST}=await import("./route");const r=await POST(new Request("https://localhost/api/admin/imagem",{method:"POST",headers:{origin:"https://localhost","X-Observatorio-CSRF":"1","content-type":"application/json",authorization:"Basic abc",cookie:`og_admin_access_token=${jwt}`},body:JSON.stringify(aprovar())}));expect(r.status).toBe(200);});
 it("rejeita cookie administrativo sem CSRF antes de consultar Auth",async()=>{const {POST}=await import("./route");const r=await POST(new Request("https://localhost/api/admin/imagem",{method:"POST",headers:{origin:"https://localhost","content-type":"application/json",authorization:"Basic abc",cookie:`og_admin_access_token=${jwt}`},body:JSON.stringify(aprovar())}));expect(r.status).toBe(403);expect(calls).toHaveLength(0);});

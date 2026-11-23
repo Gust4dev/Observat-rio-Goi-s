@@ -7,6 +7,8 @@ import { LinhaDoTempo } from "@/components/LinhaDoTempo";
 import { SeloConferencia, SeloSituacao } from "@/components/SeloSituacao";
 import { SeloDemonstracao } from "@/components/SeloDemonstracao";
 import { RespostaOficial } from "@/components/RespostaOficial";
+import { ParticipacaoRelato } from "@/components/ParticipacaoRelato";
+import { participacaoProtegidaVercel } from "@/lib/registro/staging";
 import { obterProblema, urlImagem } from "@/lib/dados/consultas";
 import { formatarData } from "@/lib/formato";
 import { descricaoSituacao, temDocumentacaoResolucao } from "@/lib/situacao";
@@ -20,7 +22,7 @@ export async function generateMetadata({ params }: PageProps<"/problema/[id]">):
   const dados = await obterProblema(id);
   if (!dados) return { title: "Relato não encontrado", description: "Relato não encontrado.", robots: { index: false, follow: false } };
   const p = dados.problema;
-  const description = `Dados de demonstração · ${p.categoria_nome} em ${p.municipio_nome} — situação: ${situacaoPublica(dados)}`;
+  const description = `${process.env.VERCEL_ENV === "production" ? "" : "Dados de demonstração · "}${p.categoria_nome} em ${p.municipio_nome} — situação: ${situacaoPublica(dados)}`;
   const url = urlPublica(p.id);
   return {
     title: p.titulo, description,
@@ -48,7 +50,7 @@ export default async function PaginaProblema(props: PageProps<"/problema/[id]">)
   const fotos = imagens.slice(0, 3).map(i => ({ id: i.id, descricao: i.descricao_publica, url: urlImagem(i.id) })).filter((f): f is { id: string; descricao: string; url: string } => f.url !== null);
   return <article className="mx-auto flex w-full min-w-0 max-w-[680px] flex-col gap-8 break-words">
     <header className="flex min-w-0 flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3"><p className="text-sm font-semibold">{p.categoria_nome}</p><SeloDemonstracao /></div>
+      <div className="flex flex-wrap items-center gap-3"><p className="text-sm font-semibold">{p.categoria_nome}</p>{process.env.VERCEL_ENV !== "production" && <SeloDemonstracao />}</div>
       <h1>{p.titulo}</h1>
       <p><Link href={`/municipios/${encodeURIComponent(p.municipio_slug)}`} prefetch={false}>{p.municipio_nome}</Link></p>
       <dl className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-[auto_1fr]">
@@ -70,9 +72,11 @@ export default async function PaginaProblema(props: PageProps<"/problema/[id]">)
     <section aria-labelledby="titulo-acoes" className="flex flex-col gap-3"><h2 id="titulo-acoes">Acompanhe este relato</h2>
       {url ? <a className="inline-flex min-h-12 items-center justify-center rounded-lg bg-acao px-4 py-3 text-acao-texto" href={`https://wa.me/?text=${encodeURIComponent(url)}`} rel="noopener noreferrer">Compartilhar no WhatsApp</a> : <p>Compartilhamento indisponível enquanto o endereço público não estiver configurado.</p>}
       <p>Também me afeta: {p.confirmacoes_total}. A contagem não mede gravidade nem quantidade total de pessoas afetadas.</p>
+      {participacaoProtegidaVercel() ? <ParticipacaoRelato id={p.id} afeta={process.env.AFETA_HABILITADO === "true"} /> : <>
       <button type="button" disabled aria-describedby="acoes-indisponiveis" className="min-h-12 rounded-lg border border-borda px-4">Também me afeta — indisponível</button>
       <button type="button" disabled aria-describedby="acoes-indisponiveis" className="min-h-12 rounded-lg border border-borda px-4">Sinalizar este relato — indisponível</button>
       <p id="acoes-indisponiveis" className="text-sm text-texto-suave">Estas ações aguardam implementação e definição das regras de privacidade.</p>
+      </>}
     </section>
     <AvisoMetodologico />
   </article>;
