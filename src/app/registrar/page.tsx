@@ -13,22 +13,30 @@ export const metadata: Metadata = {
 
 type Consulta = Promise<{ municipio?: string | string[] }>;
 
-async function FormularioRegistroRuntime({ siteKey, searchParams }: { siteKey: string | undefined; searchParams: Consulta }) {
+async function FormularioRegistroRuntime({ searchParams }: { searchParams: Consulta }) {
   // Os segredos são lidos por requisição, dentro do limite Suspense do shell estático.
   await connection();
   const consulta = await searchParams;
   const municipioInicial = typeof consulta.municipio === "string" ? consulta.municipio : "";
   let municipios: { slug: string; nome: string }[] = [];
   let categorias: { slug: string; nome: string }[] = [];
-  let indisponivel = false;
+  let registroDisponivel = false;
+  let captchaObrigatorio = true;
+  let siteKey: string | undefined;
   let fotosHabilitadas = false;
   try {
-    fotosHabilitadas = configServidor().fotosHabilitadas;
-    [municipios, categorias] = await Promise.all([listarMunicipios(), listarCategorias()]);
+    const config = configServidor("registrar");
+    if (config.registroDisponivel) {
+      [municipios, categorias] = await Promise.all([listarMunicipios(), listarCategorias()]);
+      registroDisponivel = true;
+      captchaObrigatorio = config.captchaRegistroObrigatorio;
+      siteKey = config.turnstileSiteKey;
+      fotosHabilitadas = config.fotosHabilitadas;
+    }
   } catch {
-    indisponivel = true;
+    registroDisponivel = false;
   }
-  return <RegistrarForm municipioInicial={municipioInicial} municipios={municipios} categorias={categorias} siteKey={siteKey} indisponivel={indisponivel} fotosHabilitadas={fotosHabilitadas} />;
+  return <RegistrarForm municipioInicial={municipioInicial} municipios={municipios} categorias={categorias} siteKey={siteKey} captchaObrigatorio={captchaObrigatorio} registroDisponivel={registroDisponivel} fotosHabilitadas={fotosHabilitadas} />;
 }
 
 export default function RegistrarPage({ searchParams }: { searchParams: Consulta }) {
@@ -40,7 +48,7 @@ export default function RegistrarPage({ searchParams }: { searchParams: Consulta
     </header>
     <SemJavaScript />
     <Suspense fallback={<p role="status" aria-busy="true">Verificando disponibilidade do registro…</p>}>
-      <FormularioRegistroRuntime searchParams={searchParams} siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY} />
+      <FormularioRegistroRuntime searchParams={searchParams} />
     </Suspense>
   </article>;
 }

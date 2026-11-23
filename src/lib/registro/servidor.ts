@@ -1,6 +1,7 @@
 import "server-only";
 import type { ZodType } from "zod";
 import { ErroRegistro } from "./erros";
+import { ambienteEscritaHabilitado, captchaRegistroObrigatorio } from "./staging";
 import { resolveSupabaseKeys, supabaseApiHeaders } from "../supabase-keys.mjs";
 
 const FUNCOES = ["registrar_ocorrencia", "registrar_imagem", "consultar_slot_imagem", "acompanhar_por_token", "solicitar_exclusao_por_token", "consumir_limite", "triagem_sinais"] as const;
@@ -30,7 +31,7 @@ function inteiro(nome: string): number {
 }
 
 /** Lida apenas no servidor, sem exportar configuração para componente de cliente. */
-export function configServidor() {
+export function configServidor(contexto?: "registrar") {
   let url: URL;
   try { url = new URL(obrigatoria("NEXT_PUBLIC_SUPABASE_URL")); }
   catch { throw new ErroRegistro("indisponivel"); }
@@ -43,7 +44,8 @@ export function configServidor() {
   const chave = resolveSupabaseKeys(process.env).secretKey;
   if (!chave) throw new ErroRegistro("indisponivel");
   if (Buffer.byteLength(hmacSegredo, "utf8") < 32) throw new ErroRegistro("indisponivel");
-  const turnstileHostname = process.env.VERCEL_ENV === "production"
+  const captchaObrigatorio = contexto !== "registrar" || captchaRegistroObrigatorio();
+  const turnstileHostname = captchaObrigatorio && process.env.VERCEL_ENV === "production"
     ? obrigatoria("TURNSTILE_HOSTNAME").toLowerCase()
     : undefined;
   if (turnstileHostname && (
@@ -53,9 +55,11 @@ export function configServidor() {
   return {
     base: url.origin,
     chave,
-    turnstileSecret: obrigatoria("TURNSTILE", "SECRET"),
-    turnstileSiteKey: obrigatoria("NEXT_PUBLIC_TURNSTILE_SITE_KEY"),
+    turnstileSecret: captchaObrigatorio ? obrigatoria("TURNSTILE", "SECRET") : undefined,
+    turnstileSiteKey: captchaObrigatorio ? obrigatoria("NEXT_PUBLIC_TURNSTILE_SITE_KEY") : undefined,
     turnstileHostname,
+    captchaRegistroObrigatorio: captchaObrigatorio,
+    registroDisponivel: contexto === "registrar" && modoPublicacao === "moderar_tudo" && ambienteEscritaHabilitado(),
     hmacSegredo,
     modoPublicacao,
     fotosHabilitadas: fotosHabilitadas(),
@@ -67,9 +71,12 @@ export function configServidor() {
   };
 }
 
-export async function rpc<T>(funcao: FuncaoRegistro, parametros: Record<string, unknown>, schema: ZodType<T>): Promise<T> {
+export async function rpc<T>(
+  funcao: FuncaoRegistro, parametros: Record<string, unknown>, schema: ZodType<T>,
+  config?: Pick<ReturnType<typeof configServidor>, "base" | "chave">,
+): Promise<T> {
   if (!(FUNCOES as readonly string[]).includes(funcao)) throw new ErroRegistro("indisponivel");
-  const { base, chave } = configServidor();
+  const { base, chave } = config ?? configServidor();
   let resposta: Response;
   try {
     resposta = await fetch(`${base}/rest/v1/rpc/${funcao}`, {

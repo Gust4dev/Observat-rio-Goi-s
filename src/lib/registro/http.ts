@@ -68,7 +68,7 @@ export async function limitarHttp(request: Request, config: ConfigRegistro, oper
   const permitida = await rpc("consumir_limite", {
     p_chave: bytea(chaveLimite(config.hmacSegredo, operacao, origem)),
     p_janela: `${config.limites.janelaSegundos} seconds`, p_maximo: config.limites[operacao],
-  }, z.boolean());
+  }, z.boolean(), config);
   if (!permitida) throw new ErroRegistro("limite_excedido");
   return origem;
 }
@@ -90,6 +90,7 @@ export async function resolverReferencia(recurso: "municipios" | "categorias", s
 }
 
 export async function verificarTurnstile(token: string, config: ConfigRegistro) {
+  if (!config.turnstileSecret) throw new ErroRegistro("indisponivel");
   let r: Response;
   try { r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ secret: config.turnstileSecret, response: token }), signal: AbortSignal.timeout(8000) }); }
   catch { throw new ErroRegistro("indisponivel"); }

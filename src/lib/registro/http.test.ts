@@ -21,6 +21,7 @@ function request(body: unknown = entrada, headers: Record<string, string> = {}, 
 beforeEach(() => {
   chamadas = []; respostaCaptcha = true; hostnameCaptcha = undefined; limite = true; falha = ""; repetida = false; resultadoAcompanhar = [dados];
   vi.stubEnv("NODE_ENV", "test"); vi.stubEnv("VERCEL", "");
+  vi.stubEnv("BETA_REGISTRO_PROTEGIDA_VERCEL", "");
   vi.stubEnv("AMBIENTE_REGISTRO", "staging_ficticio"); vi.stubEnv("VERCEL_ENV", "");
   vi.stubEnv("ACESSO_STAGING_USUARIO", ""); vi.stubEnv("ACESSO_STAGING_SENHA", "");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://db.example"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test"); vi.stubEnv("SUPABASE_SECRET_KEY", "sb_secret_test"); vi.stubEnv("TURNSTILE_SECRET", "captcha-ficticio"); vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-ficticio"); vi.stubEnv("HMAC_SEGREDO", "h".repeat(32)); vi.stubEnv("MODO_PUBLICACAO", "");
@@ -126,6 +127,59 @@ describe("registro HTTP", () => {
     expect((await registrar(req)).status).toBe(status);
     expect(chamadas.some(c => c.url.endsWith("registrar_ocorrencia"))).toBe(status === 201);
     if (status === 503) expect(chamadas).toHaveLength(0);
+  });
+  it.each([
+    [undefined, undefined, 201],
+    ["NODE_ENV", "development", 422],
+    ["VERCEL", "", 422],
+    ["VERCEL_ENV", "preview", 422],
+    ["BETA_REGISTRO_PROTEGIDA_VERCEL", "false", 422],
+    ["BETA_REGISTRO_TEXTUAL_ATIVA", "false", 422],
+    ["AMBIENTE_REGISTRO", "staging_ficticio", 422],
+    ["SUPABASE_PRODUCTION_PROJECT_REF", "outra-ref", 422],
+    ["MODO_PUBLICACAO", "texto_automatico", 422],
+    ["FOTOS_HABILITADAS", "true", 422],
+  ] as const)("valida o gate Production sem Turnstile (%s, %s)", async (variavel, valor, status) => {
+    const ref = "b".repeat(20);
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERCEL", "1"); vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("AMBIENTE_REGISTRO", "production"); vi.stubEnv("BETA_REGISTRO_TEXTUAL_ATIVA", "true");
+    vi.stubEnv("BETA_REGISTRO_PROTEGIDA_VERCEL", "true"); vi.stubEnv("SUPABASE_PRODUCTION_PROJECT_REF", ref);
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", `https://${ref}.supabase.co`);
+    vi.stubEnv("TURNSTILE_HOSTNAME", ""); vi.stubEnv("MODO_PUBLICACAO", "moderar_tudo"); vi.stubEnv("FOTOS_HABILITADAS", "false");
+    vi.stubEnv("TURNSTILE_SECRET", ""); vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "");
+    if (variavel) vi.stubEnv(variavel, valor);
+    const req = new Request("https://observatorio-go.vercel.app/api/registrar", {
+      method: "POST", headers: { origin: "https://observatorio-go.vercel.app", "content-type": "application/json", "x-forwarded-for": "192.0.2.1" },
+      body: JSON.stringify({ ...entrada, turnstile: undefined }),
+    });
+    const resposta = await registrar(req);
+    expect(resposta.status).toBe(status);
+    if (status !== 201) {
+      expect(chamadas).toHaveLength(0);
+      return;
+    }
+    expect(chamadas.some(c => c.url.includes("siteverify"))).toBe(false);
+    expect(chamadas.find(c => c.url.endsWith("registrar_ocorrencia"))?.body.p_moderacao).toBe("pendente");
+    chamadas.length = 0;
+    const acompanhamento = new Request("https://observatorio-go.vercel.app/api/acompanhar", {
+      method: "POST", headers: req.headers, body: JSON.stringify({ token }),
+    });
+    expect((await acompanhar(acompanhamento)).status).toBe(503);
+    expect(chamadas).toHaveLength(0);
+  });
+  it.each(["preview", "local"] as const)("bloqueia cadastro sem Turnstile em %s", async (ambiente) => {
+    vi.stubEnv("BETA_REGISTRO_PROTEGIDA_VERCEL", "true");
+    if (ambiente === "preview") {
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("VERCEL", "1"); vi.stubEnv("VERCEL_ENV", "preview");
+      vi.stubEnv("ACESSO_STAGING_USUARIO", "teste"); vi.stubEnv("ACESSO_STAGING_SENHA", "teste");
+    }
+    const headers = { "x-forwarded-for": "192.0.2.1" };
+    expect((await registrar(request({ ...entrada, turnstile: undefined }, headers))).status).toBe(422);
+    vi.stubEnv("TURNSTILE_SECRET", ""); vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "");
+    expect((await registrar(request(entrada, headers))).status).toBe(503);
+    expect(chamadas).toHaveLength(0);
   });
   it("preview produtivo exige credenciais de staging e mantém revisão", async () => {
     vi.stubEnv("NODE_ENV", "production"); vi.stubEnv("VERCEL", "1"); vi.stubEnv("VERCEL_ENV", "preview");

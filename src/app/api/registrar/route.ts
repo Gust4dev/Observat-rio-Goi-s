@@ -1,7 +1,7 @@
-import { exigirStaging } from "@/lib/registro/staging";
+import { captchaRegistroObrigatorio, exigirStaging } from "@/lib/registro/staging";
 import { z } from "zod";
 import { ErroRegistro } from "@/lib/registro/erros";
-import { registroSchema } from "@/lib/registro/schemas";
+import { registroProtegidoVercelSchema, registroSchema } from "@/lib/registro/schemas";
 import { bytea } from "@/lib/registro/seguranca";
 import { configServidor, rpc } from "@/lib/registro/servidor";
 import { entradaHttp, falhaHttp, limitarHttp, resolverReferencia, respostaPrivada, verificarTurnstile } from "@/lib/registro/http";
@@ -12,26 +12,30 @@ const sinaisSchema = z.array(z.object({ out_texto_repetido: z.boolean(), out_ori
 export async function POST(request: Request) {
   let etapa = "entrada";
   try {
-    const entrada = await entradaHttp(request, registroSchema);
+    const schema = captchaRegistroObrigatorio() ? registroSchema : registroProtegidoVercelSchema;
+    const entrada = await entradaHttp(request, schema);
     etapa = "ambiente";
     exigirStaging(request);
-    const config = configServidor();
-    if (config.modoPublicacao !== "moderar_tudo") throw new ErroRegistro("indisponivel");
+    const config = configServidor("registrar");
+    if (!config.registroDisponivel) throw new ErroRegistro("indisponivel");
     etapa = "limite";
     const origem = await limitarHttp(request, config, "registrar");
     etapa = "captcha";
-    await verificarTurnstile(entrada.turnstile, config);
+    if (config.captchaRegistroObrigatorio) {
+      if (!entrada.turnstile) throw new ErroRegistro("entrada_invalida");
+      await verificarTurnstile(entrada.turnstile, config);
+    }
     etapa = "referencias";
     const [municipio, categoria] = await Promise.all([resolverReferencia("municipios", entrada.municipio, config), resolverReferencia("categorias", entrada.categoria, config)]);
     etapa = "triagem";
-    await rpc("triagem_sinais", { p_titulo: entrada.titulo, p_descricao: entrada.descricao, p_origem_hash: bytea(origem), p_janela: `${config.triagem.janelaSegundos} seconds`, p_limite_origem: config.triagem.limiteOrigem }, sinaisSchema);
+    await rpc("triagem_sinais", { p_titulo: entrada.titulo, p_descricao: entrada.descricao, p_origem_hash: bytea(origem), p_janela: `${config.triagem.janelaSegundos} seconds`, p_limite_origem: config.triagem.limiteOrigem }, sinaisSchema, config);
     etapa = "registro";
     const [resultado] = await rpc("registrar_ocorrencia", {
       p_municipio_id: municipio, p_categoria_id: categoria, p_titulo: entrada.titulo, p_descricao: entrada.descricao,
       p_anonimo: true, p_nome: null, p_whatsapp: null, p_consentimento: false, p_consentimento_versao: null,
       p_token_hash: bytea(entrada.token_hash), p_moderacao: "pendente", p_retencao_dias: null,
       p_chave_idempotencia: entrada.chave_idempotencia, p_origem_hash: bytea(origem),
-    }, resultadoSchema);
+    }, resultadoSchema, config);
     return respostaPrivada({ protocolo: resultado.out_protocolo, confirmacao: "Relato recebido." }, 201);
   } catch (erro) { return falhaHttp(erro, "registrar", etapa); }
 }

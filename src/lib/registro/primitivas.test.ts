@@ -141,6 +141,25 @@ describe("cliente de servidor", () => {
     ambiente(); vi.stubEnv("MODO_PUBLICACAO", "");
     expect(configServidor().modoPublicacao).toBe("moderar_tudo");
   });
+  it("aceita proteção Vercel sem chaves Turnstile só no Production autorizado", () => {
+    ambiente();
+    const ref = "a".repeat(20);
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERCEL", "1"); vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("BETA_REGISTRO_PROTEGIDA_VERCEL", "true");
+    vi.stubEnv("BETA_REGISTRO_TEXTUAL_ATIVA", "true"); vi.stubEnv("AMBIENTE_REGISTRO", "production");
+    vi.stubEnv("SUPABASE_PRODUCTION_PROJECT_REF", ref); vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", `https://${ref}.supabase.co`);
+    vi.stubEnv("TURNSTILE_HOSTNAME", ""); vi.stubEnv("MODO_PUBLICACAO", "moderar_tudo"); vi.stubEnv("FOTOS_HABILITADAS", "false");
+    vi.stubEnv("TURNSTILE_SECRET", ""); vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "");
+    expect(configServidor("registrar")).toMatchObject({ captchaRegistroObrigatorio: false, registroDisponivel: true, turnstileSecret: undefined, turnstileSiteKey: undefined });
+    expect(() => configServidor()).toThrow(ErroRegistro);
+  });
+  it("não aceita ausência de Turnstile quando a proteção Vercel não está autorizada", () => {
+    ambiente(); vi.stubEnv("VERCEL", "1"); vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("BETA_REGISTRO_PROTEGIDA_VERCEL", "true");
+    vi.stubEnv("TURNSTILE_SECRET", ""); vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "");
+    expect(() => configServidor("registrar")).toThrow(ErroRegistro);
+  });
   it("limites anti-abuso precisam estar configurados com inteiros positivos", () => {
     ambiente(); vi.stubEnv("LIMITE_JANELA_SEGUNDOS", "");
     expect(() => configServidor()).toThrow(ErroRegistro);

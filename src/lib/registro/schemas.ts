@@ -34,6 +34,7 @@ export const registroSchema = z.strictObject({
   chave_idempotencia: chaveIdempotenciaSchema,
   turnstile: z.string().min(1).max(2048),
 });
+export const registroProtegidoVercelSchema = registroSchema.partial({ turnstile: true });
 export const acompanharSchema = z.strictObject({ token: tokenSchema });
 export const excluirSchema = z.strictObject({ token: tokenSchema, confirmacao: z.literal(true) });
 export type EntradaRegistro = z.infer<typeof registroSchema>;

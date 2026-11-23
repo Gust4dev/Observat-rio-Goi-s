@@ -23,6 +23,16 @@ describe("segredo de acompanhamento no navegador", () => {
     expect(corpo).not.toHaveProperty("token");
   });
 
+  it("omite Turnstile quando o modo de proteção é fornecido pela Vercel", () => {
+    const semCaptcha = {
+      municipio: "goiania", categoria: "mobilidade", titulo: "Buraco na rua",
+      descricao: "Há um buraco grande na avenida principal.", tokenHash: "b".repeat(64),
+      chaveIdempotencia: "7e3988aa-2c1e-4d9e-a8fa-455e84ce0634",
+    };
+    const corpo = criarCorpoRegistro(semCaptcha);
+    expect(corpo).not.toHaveProperty("turnstile");
+  });
+
   it("mantém o token exclusivamente no fragmento e lê fragmentos válidos", () => {
     const link = criarLinkPrivado("https://observatorio.test/acompanhar", token);
     const url = new URL(link);
