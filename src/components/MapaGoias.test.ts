@@ -23,10 +23,10 @@ describe('mapa municipal',()=>{
  it('distingue cobertura, zero e indisponibilidade sem inventar contagem',()=>{
   expect(textoPainel({estado:'indisponivel'})).toBe('Dados indisponíveis. Tente novamente mais tarde.');
   expect(textoPainel({estado:'carregando'})).toContain('Carregando');
-  expect(textoPainel({estado:'disponivel',total:0,ativoAcompanhamento:true})).toBe('Ainda não há relatos publicados neste município.');
+  expect(textoPainel({estado:'disponivel',total:0,ativoAcompanhamento:true})).toBe('Não há dados agregados exibíveis para este município.');
   expect(textoPainel({estado:'disponivel',total:0,ativoAcompanhamento:false})).toBe('Ainda não acompanhamos este município. Isso não significa que não existam problemas.');
-  expect(textoPainel({estado:'disponivel',total:7,ativoAcompanhamento:false})).toContain('7 relatos publicados na plataforma');
-  expect(textoPainel({estado:'disponivel',total:7,ativoAcompanhamento:true})).toContain('7 relatos publicados na plataforma');
+  expect(textoPainel({estado:'disponivel',total:7,ativoAcompanhamento:false})).toContain('7 relatos nos indicadores públicos');
+  expect(textoPainel({estado:'disponivel',total:7,ativoAcompanhamento:true})).toContain('7 relatos nos indicadores públicos');
  });
  it('produz destinos GET e rejeita slug fora do catálogo',()=>{
   expect(destinoMunicipio('/dados','goiania','categoria=saude')).toBe('/dados?categoria=saude&municipio=goiania#territorio');
@@ -45,7 +45,7 @@ describe('mapa municipal',()=>{
   expect(html).toContain('Toque em um município para selecioná-lo. Use + e − para aproximar ou arraste para explorar. O seletor também permite escolher pelo nome.');
   for(const nome of ['Ampliar mapa','Reduzir mapa','Mostrar Goiás inteiro'])expect(html).toContain(`aria-label="${nome}"`);
   expect(html).toContain('<input type="hidden" name="categoria" value="saude"/>');expect(html).not.toContain('name="municipio" value="x"');
-  expect(html).toContain('3 relatos publicados');expect(html).toContain('Goiânia');
+  expect(html).toContain('3 relatos nos indicadores públicos');expect(html).toContain('Goiânia');
   expect(html).not.toContain('touch-action');expect(html).not.toContain('requestSubmit');
  });
  it('SSR: sem município inicial não há seleção nem contagem', ()=>{

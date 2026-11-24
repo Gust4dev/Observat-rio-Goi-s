@@ -14,7 +14,9 @@ it("separa município acompanhado vazio do município sem acompanhamento e prese
  obter.mockResolvedValue({slug:"goiania",nome:"Goiânia",total:0,ativo_acompanhamento:true});
  const ativo = await Pagina(props);
  // O cabeçalho é SSR síncrono; a lista permanece dentro da fronteira Suspense real.
- expect(renderToStaticMarkup(createElement("div", {}, ativo.props.children[0]))).toContain("Sem relatos publicados");
+ const cabecalho = renderToStaticMarkup(createElement("div", {}, ativo.props.children[0]));
+ expect(cabecalho).toContain("Não há dados agregados exibíveis para este município.");
+ expect(cabecalho).not.toContain("Sem relatos publicados");
 });
 it("slug ausente retorna 404 antes da lista", async () => {
  obter.mockResolvedValue(null);

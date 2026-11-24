@@ -22,19 +22,39 @@ function inteiro(valor, minimo, maximo) {
   return numero;
 }
 
-export function configurar(env) {
+export function configurar(env, { somenteLeitura = false } = {}) {
   const { MVP_TARGET: alvo, MVP_PROJECT_REF: ref, MVP_DEPLOYMENT_ID: deployment, MVP_DETAIL_ID: id,
     MVP_MUNICIPIO: municipio, MVP_CATEGORIA: categoria, MVP_PUBLISHABLE_KEY: chave } = env;
   exigencia(alvo === TARGET && ref === REF, "alvo ou ref divergente");
   exigencia(/^dpl_[A-Za-z0-9]+$/.test(deployment ?? ""), "informe o ID do deployment aprovado no E2E");
+  const rampa = inteiro(env.MVP_RAMP_MINUTES ?? "3", 1, 10);
+  const soak = inteiro(env.MVP_SOAK_MINUTES ?? "30", 1, 60);
+  if (somenteLeitura) {
+    exigencia((env.MVP_WRITE_COUNT ?? "0") === "0", "perfil GET-only não admite escritas");
+    const municipioSomenteLeitura = env.MVP_MUNICIPIO ?? "goiania";
+    const categoriaSomenteLeitura = env.MVP_CATEGORIA ?? "vias";
+    exigencia(SLUG.test(municipioSomenteLeitura) && SLUG.test(categoriaSomenteLeitura), "filtro de leitura inválido");
+    return { deployment, id: null, municipio: municipioSomenteLeitura, categoria: categoriaSomenteLeitura,
+      chave: null, rampa, soak, escritas: 0, somenteLeitura: true };
+  }
   exigencia(UUID.test(id ?? "") && SLUG.test(municipio ?? "") && SLUG.test(categoria ?? ""), "fixture e filtros inválidos");
   exigencia(/^sb_publishable_[A-Za-z0-9_-]+$/.test(chave ?? ""), "a chave publishable do ref confirmado é obrigatória");
   return {
     deployment, id, municipio, categoria, chave,
-    rampa: inteiro(env.MVP_RAMP_MINUTES ?? "3", 1, 10),
-    soak: inteiro(env.MVP_SOAK_MINUTES ?? "30", 1, 60),
+    rampa,
+    soak,
     escritas: inteiro(env.MVP_WRITE_COUNT ?? "0", 0, 3),
+    somenteLeitura: false,
   };
+}
+
+export function caminhosCarga(config) {
+  if (config.somenteLeitura) {
+    const filtro = new URLSearchParams({ municipio: config.municipio, categoria: config.categoria });
+    return ["/", "/problemas", "/municipios", `/municipios/${config.municipio}`, "/dados", `/api/dados?${filtro}`];
+  }
+  return ["/", "/problemas", `/problema/${config.id}`, `/municipios/${config.municipio}`,
+    `/api/dados?municipio=${config.municipio}&categoria=${config.categoria}`];
 }
 
 export function confirmarDeployment(d, aprovado) {
@@ -175,11 +195,12 @@ async function executar(config) {
   const estado = parse(saude);
   exigencia(saude.classe === "ok" && estado?.banco === "ok" && estado?.origem_confirmada === true,
     `preflight de runtime falhou (${saude.classe}); nenhuma carga disparada`);
-  const detalhe = await consultarFixture(config, { id: `eq.${config.id}` });
-  exigencia(detalhe && /^\[DEMO-MVP[:\]]/.test(detalhe.titulo) && detalhe.municipio_slug === config.municipio
-    && detalhe.categoria_slug === config.categoria, "fixture de leitura não confere no ref aprovado");
-  const caminhos = ["/", "/problemas", `/problema/${config.id}`, `/municipios/${config.municipio}`,
-    `/api/dados?municipio=${config.municipio}&categoria=${config.categoria}`];
+  const caminhos = caminhosCarga(config);
+  if (!config.somenteLeitura) {
+    const detalhe = await consultarFixture(config, { id: `eq.${config.id}` });
+    exigencia(detalhe && /^\[DEMO-MVP[:\]]/.test(detalhe.titulo) && detalhe.municipio_slug === config.municipio
+      && detalhe.categoria_slug === config.categoria, "fixture de leitura não confere no ref aprovado");
+  }
   for (const caminho of caminhos) exigencia((await app(caminho)).classe === "ok", "uma rota de leitura falhou no preflight");
   const runId = randomUUID();
   const fixtures = [];
@@ -199,7 +220,7 @@ async function executar(config) {
       const fim = tempoInicial + (sessoes - 1) * 100 + 60000 * (sessoes >= 50 ? config.soak : config.rampa);
       const workers = Array.from({ length: sessoes }, async (_, posicao) => {
         await wait(posicao * 100);
-        if (sessoes === 60 && posicao === 0) {
+        if (!config.somenteLeitura && sessoes === 60 && posicao === 0) {
           for (let i = 0; i < config.escritas && !encerrando; i++) {
             try { await registrar(config, runId, fixtures, amostras); }
             catch { encerrando = true; falha = "cadastro sintético inconclusivo; iniciando limpeza"; }
@@ -225,10 +246,10 @@ async function executar(config) {
         ...analisarAmostras(amostras, (performance.now() - tempoInicial) / 1000) });
     }
   } finally {
-    const pendentes = await limpar(config, fixtures);
+    const pendentes = config.somenteLeitura ? [] : await limpar(config, fixtures);
     process.removeListener("SIGINT", parar);
     process.removeListener("SIGTERM", parar);
-    console.log(JSON.stringify({ run_id: runId, deployment: config.deployment, fases, falha,
+    console.log(JSON.stringify({ perfil: config.somenteLeitura ? "GET-only" : "misto", run_id: runId, deployment: config.deployment, fases, falha,
       cadastros_tentados: fixtures.length, limpeza_pendente: pendentes }, null, 2));
     if (encerrando || pendentes.length) process.exitCode = 1;
   }
@@ -236,8 +257,10 @@ async function executar(config) {
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   try {
-    exigencia(process.argv.length === 3 && process.argv[2] === "--execute", "use --execute após aprovar o deployment e a janela de carga");
-    await executar(configurar(process.env));
+    exigencia(process.argv.length === 3 && ["--execute", "--execute-read-only"].includes(process.argv[2]),
+      "use --execute-read-only para carga GET-only; --execute exige fixture e pré-aprovação da janela");
+    const somenteLeitura = process.argv[2] === "--execute-read-only";
+    await executar(configurar(process.env, { somenteLeitura }));
   } catch (erro) {
     console.error(erro instanceof Error ? erro.message : "ensaio interrompido");
     process.exitCode = 1;

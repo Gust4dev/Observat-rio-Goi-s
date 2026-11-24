@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { acompanharCompat, classificar, configurar, confirmarDeployment, resumir } from "./load-mvp.mjs";
+import { acompanharCompat, caminhosCarga, classificar, configurar, confirmarDeployment, resumir } from "./load-mvp.mjs";
 
 const env = {
   MVP_TARGET: "https://observatorio-go.vercel.app",
@@ -23,6 +23,36 @@ test("limita o ensaio ao alias e ref autorizados, com zero escritas por padrão"
     { MVP_PUBLISHABLE_KEY: "sb_secret_just_a_test" },
     { MVP_DETAIL_ID: "../api/cron/limpar-quarentena" },
   ]) assert.throws(() => configurar({ ...env, ...alteracao }));
+});
+
+test("perfil GET-only exige deployment aprovado e não depende de fixture, filtros ou chave", () => {
+  const readOnly = configurar({
+    MVP_TARGET: env.MVP_TARGET,
+    MVP_PROJECT_REF: env.MVP_PROJECT_REF,
+    MVP_DEPLOYMENT_ID: env.MVP_DEPLOYMENT_ID,
+    MVP_SOAK_MINUTES: "1",
+  }, { somenteLeitura: true });
+  assert.equal(readOnly.somenteLeitura, true);
+  assert.equal(readOnly.escritas, 0);
+  assert.equal(readOnly.id, null);
+  assert.equal(readOnly.chave, null);
+  assert.deepEqual(caminhosCarga(readOnly), ["/", "/problemas", "/municipios", "/municipios/goiania", "/dados",
+    "/api/dados?municipio=goiania&categoria=vias"]);
+  assert.throws(() => configurar({
+    MVP_TARGET: env.MVP_TARGET,
+    MVP_PROJECT_REF: env.MVP_PROJECT_REF,
+    MVP_DEPLOYMENT_ID: env.MVP_DEPLOYMENT_ID,
+    MVP_WRITE_COUNT: "1",
+  }, { somenteLeitura: true }));
+  assert.throws(() => confirmarDeployment({ id: "dpl_other", name: "observatorio-go", target: "production",
+    readyState: "READY", aliases: ["observatorio-go.vercel.app"] }, readOnly.deployment));
+});
+
+test("perfil misto mantém a fixture e a consulta pública filtrada", () => {
+  assert.deepEqual(caminhosCarga(configurar(env)), [
+    "/", "/problemas", `/problema/${env.MVP_DETAIL_ID}`, `/municipios/${env.MVP_MUNICIPIO}`,
+    `/api/dados?municipio=${env.MVP_MUNICIPIO}&categoria=${env.MVP_CATEGORIA}`,
+  ]);
 });
 
 test("recusa deployment desatualizado, fora de Production ou com alias divergente", () => {

@@ -30,7 +30,22 @@ it("copia antes de publicar com JWT administrativo e confere duplicado",async()=
 it("rejeita alt/checklist e nunca copia uma foto com risco sinalizado",async()=>{expect((await post({...aprovar(),descricao_publica:""})).status).toBe(422);expect((await post({...aprovar(),checklist:{...checklist,rosto:true}})).status).toBe(422);expect((await post({...aprovar(),checklist:{}})).status).toBe(422);expect(calls.some(c=>c.url.includes("/storage/"))).toBe(false);});
 it("compensa cópia em RPC falha e libera lease após apagar",async()=>{failRpc=true;expect((await post(aprovar())).status).toBe(503);const rpc=calls.findIndex(c=>c.url.endsWith("admin_moderar_imagem"));const del=calls.findIndex(c=>c.init?.method==="DELETE");expect(del).toBeGreaterThan(rpc);expect(calls.findIndex(c=>c.url.endsWith("admin_abandonar_imagem"))).toBeGreaterThan(del);});
 it("remoção muda estado antes de excluir ambas cópias e pode ser repetida",async()=>{const body={imagem_id:id,acao:"remover",motivo:"Retirada fictícia",checklist};expect((await post(body)).status).toBe(200);expect(calls.findIndex(c=>c.init?.method==="DELETE")).toBeGreaterThan(calls.findIndex(c=>c.url.endsWith("admin_moderar_imagem")));expect(calls.filter(c=>c.init?.method==="DELETE")).toHaveLength(2);expect((await post(body)).status).toBe(200);});
-it("falha de delete mantém erro genérico e permite retry",async()=>{failDelete=true;expect((await post({imagem_id:id,acao:"remover",motivo:"Retirada fictícia",checklist})).status).toBe(503);});
+it.each([false,true])("informa limpeza pendente após retirada confirmada (resposta RPC perdida: %s)",async perdida=>{
+ failDelete=true;rpcCommitted=perdida;rpcCommittedAction="remover";
+ const body={imagem_id:id,acao:"remover",motivo:"Retirada fictícia",checklist};
+ const resposta=await post(body);
+ expect(resposta.status).toBe(200);
+ expect(await resposta.json()).toEqual({confirmacao:"Foto removida.",limpeza_pendente:true});
+ expect(calls.filter(c=>c.init?.method==="DELETE")).toHaveLength(2);
+ failDelete=false;
+ const repetida=await post(body);
+ expect(await repetida.json()).toEqual({confirmacao:"Foto removida."});
+});
+it("não reserva operação quando falta a chave do Storage",async()=>{
+ vi.stubEnv("SUPABASE_SECRET_KEY","");
+ expect((await post(aprovar())).status).toBe(503);
+ expect(calls.some(c=>c.url.endsWith("admin_preparar_imagem"))).toBe(false);
+});
 
 
 it("compensa upload com resposta perdida e GET público fica indisponível",async()=>{uploadLost=true;expect((await post(aprovar())).status).toBe(503);const get=await fetch(`https://test.supabase.co/storage/v1/object/imagens-publicas/${id}.jpg`);expect(get.status).toBe(404);});
@@ -66,6 +81,6 @@ it("não invalida quando a RPC de moderação falha",async()=>{
  failRpc=true;expect((await post(aprovar())).status).toBe(503);expect(revalidate).not.toHaveBeenCalled();
 });
 it("invalida remoção confirmada mesmo quando Storage falha depois",async()=>{
- failDelete=true;expect((await post({imagem_id:id,acao:"remover",motivo:"Retirada fictícia",checklist})).status).toBe(503);
+ failDelete=true;expect((await post({imagem_id:id,acao:"remover",motivo:"Retirada fictícia",checklist})).status).toBe(200);
  expect(revalidate).toHaveBeenCalledExactlyOnceWith("problemas",{expire:0});
 });

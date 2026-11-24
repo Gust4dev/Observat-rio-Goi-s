@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { adminRequest, mensagemErroAdmin, resumoAuditoriaAdmin, rotaColecaoAdmin, rotaFilaAdmin } from "./admin-api";
+import { adminRequest, mensagemErroAdmin, resumoAuditoriaAdmin, rotaColecaoAdmin, rotaFilaAdmin, rotaRevisaoAdmin } from "./admin-api";
+
+it("mantém o estado da fila de revisão ao paginar e permite consultar o histórico", () => {
+  expect(rotaRevisaoAdmin("denuncias", "aberta", "cursor+2"))
+    .toBe("/api/admin/denuncias?limite=50&status=aberta&cursor=cursor%2B2");
+  expect(rotaRevisaoAdmin("respostas", "pendente")).toBe("/api/admin/respostas?limite=50&status=pendente");
+  expect(rotaRevisaoAdmin("respostas", "")).toBe("/api/admin/respostas?limite=50");
+});
 
 it("envia o filtro explícito de publicados", () => {
   const rota = new URL(rotaFilaAdmin({ ordem: "recentes", pendencia: "", moderacao: "publicado" }), "https://app.example");

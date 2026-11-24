@@ -16,7 +16,7 @@ describe("home sem JavaScript", () => {
   expect(html).toContain('href="/problemas?municipio=goiania"');
   expect(html).toContain('value="goiania" selected=""');
   expect(html).toContain('method="get"');
-  expect(html).toContain("3 relatos publicados na plataforma");
+  expect(html).toContain("3 relatos nos indicadores públicos");
   expect(html).toContain("Goiás, visto de perto.");
   expect(html).toContain("Encontre sua cidade, consulte relatos públicos e acompanhe as atualizações.");
   expect(html).toContain("246 municípios");
@@ -71,6 +71,7 @@ it("rotula métricas e relatos fictícios e apresenta método antes das contagen
  const html = renderToStaticMarkup(await HomeConteudo({searchParams:Promise.resolve({})}));
  expect(html.match(/Dados de demonstração/g)).toHaveLength(3);
  expect(html.indexOf("Como ler")).toBeLessThan(html.indexOf("<dd"));
+ expect(html).toContain("Os totais consideram apenas os grupos que podem ser divulgados.");
  expect(html).toContain("Relato de teste");
  expect(html.indexOf("Relato de teste")).toBeLessThan(html.indexOf("Como funciona"));
 });

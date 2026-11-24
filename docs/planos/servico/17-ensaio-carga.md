@@ -22,6 +22,14 @@ Rode uma vez por janela de hora e verifique o saldo do limite de 10 cadastros/ho
 node scripts/load-mvp.mjs --execute
 ```
 
+Para medir somente navegação pública sem depender de relato ativo nem criar fixtures, use o perfil estritamente GET-only:
+
+```powershell
+node scripts/load-mvp.mjs --execute-read-only
+```
+
+Esse perfil requer apenas `MVP_TARGET`, `MVP_PROJECT_REF`, `MVP_DEPLOYMENT_ID` e os limites de duração; usa `goiania`/`vias` como filtro limitado por padrão, substituíveis por `MVP_MUNICIPIO` e `MVP_CATEGORIA`. Ele percorre home, lista, municípios, detalhe municipal, dados e exportação filtrada; não consulta o PostgREST diretamente, não envia POST e não precisa de chave ou token. Se o runtime responder com Challenge, o runner encerra antes da rampa; não tente contornar a proteção. O perfil mede navegação no alias, mas não substitui as jornadas de cadastro, acompanhamento, participação ou moderação.
+
 O cliente mantém até uma requisição em andamento por sessão e alterna entre home, lista, detalhe, página municipal e exportação filtrada. O relatório JSON registra o deployment, o ID da execução, vazão, p50/p95/p99 e contagens por classe e rota. Challenge e 429 interrompem a campanha sem reduzir as proteções. O relatório também acusa abortos por erro acumulado e eventual fixture cujo desaparecimento não pôde ser comprovado. Nesse caso, confira o ID/protocolo exato pelo console; mantenha a auditoria. O script evita seguir redirecionamentos.
 
 O perfil concentra leituras e inclui até três cadastros com acompanhamento opcional. Cada cadastro exige que o protocolo e o título retornados pelo acompanhamento coincidam com a fixture. Um patamar de leitura aprovado demonstra capacidade para esse perfil. Valide participação e administração em uma jornada E2E separada e registre a concorrência desses fluxos como pendente de medição enquanto não houver carga representativa.

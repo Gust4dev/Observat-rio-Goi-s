@@ -82,4 +82,19 @@ describe("Contagem de participação no detalhe", () => {
     expect(renderizar(7).html).toContain("Também me afeta: 7.");
     expect(post).toHaveBeenCalledTimes(2);
   });
+
+  it("permite repetir se a resposta não comprovar o total público", async () => {
+    const post = vi.fn()
+      .mockResolvedValueOnce(Response.json({}, { status: 202 }))
+      .mockResolvedValueOnce(Response.json({ confirmacoes_total: 8 }, { status: 202 }));
+    vi.stubGlobal("fetch", post);
+
+    renderizar(7).clicar();
+    await vi.waitFor(() => expect(renderizar(7).html).toContain("Não foi possível confirmar o total atualizado."));
+    expect(renderizar(7).desabilitado).toBe(false);
+    expect(renderizar(7).html).toContain("Também me afeta: 7.");
+    renderizar(7).clicar();
+    await vi.waitFor(() => expect(renderizar(7).html).toContain("Também me afeta: 8."));
+    expect(post).toHaveBeenCalledTimes(2);
+  });
 });

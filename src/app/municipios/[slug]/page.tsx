@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { AvisoMetodologico } from "@/components/AvisoMetodologico";
 import { CarregandoLista, ListaProblemas } from "@/components/ListaProblemas";
 import { obterMunicipio } from "@/lib/dados/consultas";
+import { textoPainel } from "@/lib/mapa/geometria";
 
 // Valor de exemplo só para o Next validar a rota em tempo de build; slugs reais são
 // renderizados sob demanda. É inválido de propósito (não consulta o banco).
@@ -38,7 +39,7 @@ export default async function PaginaMunicipio(props: PageProps<"/municipios/[slu
       <header>
         <h1>{m.nome}</h1>
         <p className="mt-2 text-texto-suave">
-          {m.total === 0 ? "Sem relatos publicados" : m.total === 1 ? "1 relato publicado neste município" : `${m.total} relatos publicados neste município`}
+          {textoPainel({ estado: "disponivel", total: m.total, ativoAcompanhamento: true })}
         </p>
       </header>
       <AvisoMetodologico />

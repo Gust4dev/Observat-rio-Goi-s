@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import {
   adminRequest, AdminApiError, avancarPaginaAdmin, cursorPaginaAdmin, primeiraPaginaAdmin,
-  resumoAuditoriaAdmin, rotaColecaoAdmin, rotaFilaAdmin, voltarPaginaAdmin,
+  resumoAuditoriaAdmin, rotaColecaoAdmin, rotaFilaAdmin, rotaRevisaoAdmin, voltarPaginaAdmin,
   type ColecaoAdmin, type FiltrosFilaAdmin, type HistoricoPaginasAdmin,
 } from "./admin-api";
 
@@ -19,6 +19,10 @@ type Detalhe = {
 };
 const situacoes = ["registrado", "em_analise", "encaminhado", "aguardando_resposta", "em_atendimento", "resolvido", "encerrado_sem_solucao"];
 const colecoes = { denuncias: "Denúncias", respostas: "Respostas", atualizacoes: "Atualizações públicas" } as const;
+const estadosRevisao = {
+  denuncias: { aberta: "Aberta", em_analise: "Em análise", procedente: "Procedente", improcedente: "Improcedente" },
+  respostas: { pendente: "Pendente", publicada: "Publicada", rejeitada: "Rejeitada" },
+};
 const dataResumo = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" });
 
 function ListaColecao({ id, colecao, temItens, onError }: { id: string; colecao: ColecaoAdmin; temItens: boolean; onError: (error: unknown) => void }) {
@@ -74,6 +78,7 @@ export default function AdminConsole() {
   const [selected, setSelected] = useState<Item | null>(null);
   const [rows, setRows] = useState<Item[]>([]); const [busy, setBusy] = useState(false);
   const [filtros, setFiltros] = useState<FiltrosFilaAdmin>({ ordem: "antigos", pendencia: "" });
+  const [estados, setEstados] = useState({ denuncias: "aberta", respostas: "pendente" });
   const [resumo, setResumo] = useState<ResumoFila | null>(null);
   const [detalhe, setDetalhe] = useState<Detalhe | null>(null);
   const [contato, setContato] = useState<{ out_nome: string | null; out_whatsapp: string | null }[] | null>(null);
@@ -118,7 +123,7 @@ export default function AdminConsole() {
     try {
       if (section === "fila" || section === "denuncias" || section === "respostas") {
         const path = section === "fila" ? rotaFilaAdmin(filtros, cursorAlvo) :
-          `/api/admin/${section}?limite=50${cursorAlvo ? "&cursor=" + encodeURIComponent(cursorAlvo) : ""}`;
+          rotaRevisaoAdmin(section, estados[section], cursorAlvo);
         const reqResumo = section === "fila" && !cursorAlvo
           ? adminRequest<ResumoFila>("/api/admin/fila?resumo=true").then(
             value => { if (leitura === leituraAtual.current) setResumo(value); },
@@ -145,7 +150,7 @@ export default function AdminConsole() {
     } finally {
       if (leitura === leituraAtual.current) setBusy(false);
     }
-  }, [papel, section, filtros, setFailure]);
+  }, [papel, section, filtros, estados, setFailure]);
   useEffect(() => {
     let ativa = true;
     void Promise.resolve().then(() => { if (ativa) return load(); });
@@ -310,6 +315,22 @@ export default function AdminConsole() {
             {" "}Resumo calculado em <time dateTime={resumo.calculado_em}>{dataResumo.format(new Date(resumo.calculado_em))}</time>.
           </p>}
           <p className="text-sm text-gray-600">Use Atualizar para voltar à primeira página e consultar novas pendências.</p>
+        </fieldset>}
+        {(section === "denuncias" || section === "respostas") && <fieldset disabled={busy} className="border-b p-4">
+          <label>Estado{" "}
+            <select className="rounded border p-1" value={estados[section]} onChange={e => {
+              const status = e.target.value;
+              setError("");
+              setNotice("");
+              limparSelecao();
+              setEstados(anterior => ({ ...anterior, [section]: status }));
+            }}>
+              {Object.entries(estadosRevisao[section]).map(([valor, rotulo]) =>
+                <option key={valor} value={valor}>{rotulo}</option>
+              )}
+              <option value="">Todos os estados</option>
+            </select>
+          </label>
         </fieldset>}
         {busy ? <p className="p-4">Carregando…</p> : rows.length ? rows.map(row => {
           const audit = section === "auditoria" ? resumoAuditoriaAdmin(row) : null;

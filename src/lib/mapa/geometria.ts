@@ -36,8 +36,9 @@ export function textoPainel(painel:PainelMunicipio):string {
  const total=Number.isSafeInteger(painel.total)&&painel.total>=0?painel.total:null;
  if(total===null)return 'Dados indisponíveis. Tente novamente mais tarde.';
  if(!painel.ativoAcompanhamento&&total===0)return 'Ainda não acompanhamos este município. Isso não significa que não existam problemas.';
- if(total===0)return 'Ainda não há relatos publicados neste município.';
- return `${!painel.ativoAcompanhamento?'Ainda não acompanhamos este município. ':''}${total} relatos publicados na plataforma.`;
+ if(total===0)return 'Não há dados agregados exibíveis para este município.';
+ const relatos = total === 1 ? 'relato' : 'relatos';
+ return `${!painel.ativoAcompanhamento?'Ainda não acompanhamos este município. ':''}${total} ${relatos} nos indicadores públicos.`;
 }
 
 export function estadoVisualMunicipio(

@@ -49,13 +49,20 @@ export async function POST(request:Request){
   const admins=papeis.ok?z.array(z.object({user_id:z.uuid(),papel:z.enum(["moderador","gestor","superadmin"]),ativo:z.boolean()})).safeParse(await papeis.json()):null;
   if(!admins?.success||!admins.data.some(a=>a.user_id===usuario.data.id&&a.ativo))throw new FalhaAdmin(403);
   const dados=await entradaHttp(request,entrada);
+  const chave=resolveSupabaseKeys(process.env).secretKey;if(!chave)throw new FalhaAdmin(503);
   const rpc=async(nome:string,body:unknown)=>{const r=await chamar(config.base,`/rest/v1/rpc/${nome}`,usuarioHeaders,{method:"POST",body:JSON.stringify(body)});if(!r.ok)throw new FalhaAdmin(r.status===409?409:503);return r;};
   const preparacao=await rpc("admin_preparar_imagem",{p_imagem_id:dados.imagem_id,p_acao:dados.acao});
   const linhas=z.array(z.object({out_operacao:z.uuid(),out_caminho:z.string(),out_moderacao:z.string()})).length(1).safeParse(await preparacao.json());
   if(!linhas.success||!caminhoImagemValido(linhas.data[0].out_caminho))throw new FalhaAdmin(503);
-  const operacao=linhas.data[0];const chave=resolveSupabaseKeys(process.env).secretKey;if(!chave)throw new FalhaAdmin(503);
+  const operacao=linhas.data[0];
   const storageHeaders=supabaseApiHeaders(chave);const publico=`/storage/v1/object/imagens-publicas/${dados.imagem_id}.jpg`;const privado=`/storage/v1/object/imagens-quarentena/${operacao.out_caminho}`;
   const apagar=async(path:string)=>{const r=await chamar(config.base,path,storageHeaders,{method:"DELETE"});if(!r.ok&&r.status!==404)throw new FalhaAdmin(503);};
+  const concluirRemocao=async()=>{
+   revalidateTag("problemas",{expire:0});
+   const resultados=await Promise.allSettled([apagar(publico),apagar(privado)]);
+   const limpezaPendente=resultados.some(resultado=>resultado.status==="rejected");
+   return respostaPrivada({confirmacao:"Foto removida.",...(limpezaPendente&&{limpeza_pendente:true})});
+  };
   const abandonar=()=>rpc("admin_abandonar_imagem",{p_imagem_id:dados.imagem_id,p_operacao:operacao.out_operacao});
   let copiada=false;
   try{
@@ -69,9 +76,9 @@ export async function POST(request:Request){
     copiada=true;
    }
    await rpc("admin_moderar_imagem",{p_imagem_id:dados.imagem_id,p_acao:dados.acao,p_motivo:dados.motivo??null,p_descricao_publica:dados.descricao_publica??null,p_checklist:dados.checklist,p_operacao:operacao.out_operacao});
+   if(dados.acao==="remover")return concluirRemocao();
    revalidateTag("problemas",{expire:0});
-   if(dados.acao==="remover")await Promise.all([apagar(publico),apagar(privado)]);
-   return respostaPrivada({confirmacao:dados.acao==="aprovar"?"Foto aprovada.":"Foto removida."});
+   return respostaPrivada({confirmacao:"Foto aprovada."});
   }catch(erro){
    // A resposta da RPC pode ter se perdido depois do commit. Nunca apagar uma aprovação confirmada.
    if(copiada){
@@ -94,8 +101,7 @@ export async function POST(request:Request){
      const atual=await chamar(config.base,`/rest/v1/imagens?${new URLSearchParams({select:"moderacao",id:`eq.${dados.imagem_id}`})}`,usuarioHeaders);
      const estado=atual.ok?z.array(z.object({moderacao:z.string()})).length(1).safeParse(await atual.json()):null;
      if(estado?.success&&estado.data[0].moderacao==="removido"){
-      revalidateTag("problemas",{expire:0});await Promise.all([apagar(publico),apagar(privado)]);
-      return respostaPrivada({confirmacao:"Foto removida."});
+      return concluirRemocao();
      }
      await abandonar().catch(()=>{});
     }catch{/* O estado/Storage será reconciliado na repetição administrativa ou pela limpeza. */}

@@ -34,14 +34,20 @@ export function ParticipacaoRelato({ id, afeta, totalInicial }: { id: string; af
         body: JSON.stringify({ ocorrencia_id: id, ...dados }),
       });
       if (resposta.status === 202) {
-        setMensagem(rota === "afeta" ? "Confirmação recebida." : "Envio recebido para revisão.");
         if (rota === "afeta") {
-          afetaConfirmado.current = true;
-          setConfirmado(true);
           const corpo = await resposta.json().catch(() => null) as { confirmacoes_total?: unknown } | null;
           const total = corpo?.confirmacoes_total;
-          if (typeof total === "number" && Number.isSafeInteger(total) && total >= 0) setTotalConfirmado(total);
+          if (typeof total !== "number" || !Number.isSafeInteger(total) || total < 0) {
+            setMensagem("Não foi possível confirmar o total atualizado. Você pode tentar novamente.");
+            return;
+          }
+          afetaConfirmado.current = true;
+          setConfirmado(true);
+          setTotalConfirmado(total);
+          setMensagem("Confirmação recebida.");
           router.refresh();
+        } else {
+          setMensagem("Envio recebido para revisão.");
         }
       } else {
         setMensagem(resposta.status === 429 ? "Muitos envios. Aguarde para tentar novamente." : "Não foi possível concluir o envio. Confira os dados e tente novamente.");

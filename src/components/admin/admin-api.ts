@@ -50,6 +50,13 @@ export function rotaFilaAdmin(filtros: FiltrosFilaAdmin, cursor?: string | null)
   return "/api/admin/fila?" + query;
 }
 
+export function rotaRevisaoAdmin(colecao: "denuncias" | "respostas", status: string, cursor?: string | null) {
+  const query = new URLSearchParams({ limite: "50" });
+  if (status) query.set("status", status);
+  if (cursor) query.set("cursor", cursor);
+  return "/api/admin/" + colecao + "?" + query;
+}
+
 export function rotaColecaoAdmin(id: string, colecao: ColecaoAdmin, cursor?: string | null) {
   const query = new URLSearchParams({ colecao, limite: "50" });
   if (cursor) query.set("cursor", cursor);
