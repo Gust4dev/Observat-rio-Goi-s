@@ -3,27 +3,19 @@ import { AvisoMetodologico } from "./AvisoMetodologico";
 import { CartaoProblema } from "./CartaoProblema";
 import { EstadoVazio } from "./EstadoVazio";
 import { SeloDemonstracao } from "./SeloDemonstracao";
-import { MapaGoias } from "./MapaGoias";
+import { HeroInicio } from "./HeroInicio";
 import { PassosInicio } from "./PassosInicio";
-import { indicadoresGerais, listarMunicipios, obterMunicipio, ultimosProblemas } from "@/lib/dados/consultas";
-import { lerFiltros, type SearchParamsBrutos } from "@/lib/dados/params";
-import type { PainelMunicipio } from "@/lib/mapa/geometria";
+import { indicadoresGerais, resumoSemana, ultimosProblemas } from "@/lib/dados/consultas";
+import type { ResumoSemana } from "@/lib/dados/semana";
 import catalogoMapa from "@/lib/mapa/municipios.json";
 
-/** Conteúdo dependente da URL: renderizar sob Suspense com Cache Components. */
-export async function HomeConteudo({ searchParams }: { searchParams: Promise<SearchParamsBrutos> }) {
-  const [sp, municipios, indicadores, recentes] = await Promise.all([searchParams, listarMunicipios().catch(() => catalogoMapa), indicadoresGerais().catch(() => undefined), ultimosProblemas(5).catch(() => null)]);
+const RESUMO_VAZIO: ResumoSemana = { total: 0, categoriaLider: null, pontos: [] };
+
+/** Conteúdo de dados da home: renderizar sob Suspense com Cache Components. */
+export async function HomeConteudo() {
+  // A busca do hero usa sempre o catálogo local (mesma fonte do mapa e de /buscar): não depende do banco.
+  const [indicadores, recentes, resumo] = await Promise.all([indicadoresGerais().catch(() => undefined), ultimosProblemas(5).catch(() => null), resumoSemana().catch(() => RESUMO_VAZIO)]);
   const demonstracao = process.env.VERCEL_ENV !== "production";
-  const selecionado = municipios.find(m => m.slug === lerFiltros(sp).municipio);
-  let painel: PainelMunicipio = { estado: "indisponivel" };
-  if (selecionado) {
-    try {
-      const municipio = await obterMunicipio(selecionado.slug);
-      if (municipio) painel = { estado: "disponivel", total: municipio.total, ativoAcompanhamento: municipio.ativo_acompanhamento };
-    } catch {
-      // O painel territorial pode falhar sem retirar a ação de registro da home.
-    }
-  }
   const numeros = indicadores ? [
     {valor: indicadores.total_ocorrencias, texto: "relatos publicados"},
     {valor: indicadores.municipios_com_registros, texto: "municípios com registros"},
@@ -31,7 +23,7 @@ export async function HomeConteudo({ searchParams }: { searchParams: Promise<Sea
     {valor: indicadores.resolvidas_documentadas, texto: "resolvidos com documentação"},
   ] : [];
   return <div className="flex min-w-0 flex-col gap-12">
-    <MapaGoias municipios={municipios} municipioSelecionado={selecionado?.slug} painel={painel} demonstracao={demonstracao && Boolean(indicadores || recentes?.length)} variante="hero" />
+    <HeroInicio resumo={resumo} indicadores={indicadores} municipios={catalogoMapa} demonstracao={demonstracao && Boolean(indicadores || recentes?.length || resumo.total)} />
     <section aria-labelledby="titulo-numeros" className="border-t border-borda-suave pt-8"><h2 id="titulo-numeros">Números da plataforma</h2><div className="my-4"><AvisoMetodologico /></div>
       {indicadores === undefined ? <p>Indicadores indisponíveis no momento.</p> : numeros.length ? <>{demonstracao && <SeloDemonstracao />}<dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-6 lg:grid-cols-4">{numeros.map(n => <div key={n.texto} className="border-l-2 border-borda-suave pl-4"><dt className="text-sm text-texto-suave">{n.texto}</dt><dd className="mt-1 text-3xl font-bold tracking-tight tabular-nums">{n.valor.toLocaleString("pt-BR")}</dd></div>)}</dl></> : <EstadoVazio titulo="Ainda não há indicadores disponíveis" texto="Os números aparecerão quando houver dados agregados disponíveis." />}
     </section>

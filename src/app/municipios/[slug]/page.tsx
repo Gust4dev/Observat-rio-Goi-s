@@ -25,6 +25,9 @@ export async function generateMetadata({
   };
 }
 
+const CLASSE_CTA_REGISTRO =
+  "inline-flex min-h-12 items-center self-start rounded-lg bg-acao px-5 font-semibold text-sobre-acao no-underline";
+
 export default async function PaginaMunicipio(props: PageProps<"/municipios/[slug]">) {
   // Resolve o município antes de qualquer Suspense: assim o 404 sai com status HTTP 404.
   const { slug } = await props.params;
@@ -32,7 +35,7 @@ export default async function PaginaMunicipio(props: PageProps<"/municipios/[slu
   if (!m) notFound();
 
   if (!m.ativo_acompanhamento) return (
-    <div className="flex min-w-0 flex-col gap-5"><header><h1>{m.nome}</h1></header><p>Ainda não acompanhamos relatos neste município</p><p className="text-texto-suave">Isso não significa ausência de problemas. Não há prazo de início de acompanhamento definido.</p><Link href={`/registrar?municipio=${m.slug}`} prefetch={false} className="inline-flex min-h-12 items-center self-start rounded-lg bg-acao px-5 font-semibold text-sobre-acao no-underline">Registrar um problema</Link></div>
+    <div className="flex min-w-0 flex-col gap-5"><header><h1>{m.nome}</h1></header><p>Ainda não acompanhamos relatos neste município</p><p className="text-texto-suave">Isso não significa ausência de problemas. Não há prazo de início de acompanhamento definido.</p><Link href={`/registrar?municipio=${m.slug}`} prefetch={false} className={CLASSE_CTA_REGISTRO}>Registrar um problema</Link></div>
   );
   return (
     <div className="flex flex-col gap-5">
@@ -42,6 +45,9 @@ export default async function PaginaMunicipio(props: PageProps<"/municipios/[slu
           {textoPainel({ estado: "disponivel", total: m.total, ativoAcompanhamento: true })}
         </p>
       </header>
+      <Link href={`/registrar?municipio=${m.slug}`} prefetch={false} className={CLASSE_CTA_REGISTRO}>
+        Registrar um problema
+      </Link>
       <AvisoMetodologico />
       <Suspense fallback={<CarregandoLista />}>
         <ListaProblemas

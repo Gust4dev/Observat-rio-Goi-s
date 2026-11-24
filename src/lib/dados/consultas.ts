@@ -8,7 +8,7 @@ import {
   municipioCoberturaSchema, COLUNAS_MUNICIPIO_COBERTURA, municipioSchema, problemaDetalheSchema, problemaListaSchema, respostaSchema,
   COLUNAS_ATUALIZACAO, COLUNAS_CATEGORIA, COLUNAS_IMAGEM, COLUNAS_INDICADORES_GERAIS,
   COLUNAS_INDICADOR_MUNICIPIO_CATEGORIA, COLUNAS_MUNICIPIO, COLUNAS_PROBLEMA_DETALHE, COLUNAS_PROBLEMA_LISTA,
-  COLUNAS_RESPOSTA,
+  COLUNAS_RESPOSTA, COLUNAS_SEMANA, semanaSchema,
   type Atualizacao, type Categoria, type Imagem, type IndicadoresGerais, type Municipio, type ProblemaDetalhe,
   type ProblemaLista, type Resposta,
 } from "./schemas";
@@ -16,6 +16,9 @@ import {
   codificarCursor, decodificarCursor, idSchema, lerBuscaMunicipio, lerFiltros, slugSchema, TAMANHO_PAGINA,
   type Cursor, type Filtros,
 } from "./params";
+import { normalizar } from "@/lib/busca/normalizar";
+
+import { agregarSemana, JANELA_DIAS, type ResumoSemana } from "./semana";
 
 // ---------------------------------------------------------------- montagem pura (testável sem rede)
 
@@ -178,7 +181,6 @@ export async function listarMunicipios(): Promise<Municipio[]> {
 
 /** Filtra no servidor sobre o catálogo em cache, sem interpolar texto em PostgREST. */
 export function selecionarMunicipios<T extends { nome: string; slug: string }>(municipios: T[], entrada: unknown): T[] {
-  const normalizar = (nome: string) => nome.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
   const busca = normalizar(lerBuscaMunicipio(entrada));
   if (!busca) return [];
   return municipios.filter((m) => normalizar(m.nome).includes(busca)).slice(0, 12);
@@ -217,6 +219,32 @@ export async function ultimosProblemas(n: number = 5): Promise<ProblemaLista[]> 
     },
     problemaListaSchema,
   );
+}
+
+const LOTE_SEMANA = 300;
+/** Teto de segurança: 40 × 300 = 12.000 relatos por janela de 7 dias. */
+const MAX_PAGINAS_SEMANA = 40;
+
+export async function resumoSemana(): Promise<ResumoSemana> {
+  "use cache";
+  cacheLife("minutes");
+  cacheTag("problemas");
+  const corte = new Date(Date.now() - JANELA_DIAS * 864e5).toISOString();
+  const linhas: z.infer<typeof semanaSchema>[] = [];
+  let ultimo: string | undefined;
+  for (let pagina = 0; pagina < MAX_PAGINAS_SEMANA; pagina++) {
+    const filtros: [string, string][] = [["publicado_em", `gte.${corte}`]];
+    if (ultimo) filtros.push(["id", `gt.${idSchema.parse(ultimo)}`]);
+    const lote = await consultar(
+      "v_ocorrencias_publicas",
+      { select: COLUNAS_SEMANA, filtros, ordem: [{ coluna: "id", direcao: "asc" }], limite: LOTE_SEMANA },
+      semanaSchema,
+    );
+    linhas.push(...lote);
+    if (lote.length < LOTE_SEMANA) break;
+    ultimo = lote[lote.length - 1].id;
+  }
+  return agregarSemana(linhas);
 }
 
 export async function indicadoresGerais(): Promise<IndicadoresGerais | null> {

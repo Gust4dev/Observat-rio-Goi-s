@@ -14,7 +14,8 @@
     "seed:staging": "node scripts/seed-staging.mjs",
     "contrato:staging": "node scripts/contrato-staging.mjs",
     "test:fotos:staging": "node scripts/testar-fotos-staging.mjs",
-    "e2e:admin:staging": "node scripts/e2e-admin-staging.mjs"
+    "e2e:admin:staging": "node scripts/e2e-admin-staging.mjs",
+    "gerar:hero": "node scripts/gerar-geometria-hero.mjs"
   },
   "dependencies": {
     "next": "16.4.6",

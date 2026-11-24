@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { HomeConteudo } from "@/components/HomeConteudo";
 import { publicSupabaseOriginAllowed } from "@/lib/supabase-origin";
 
-export default function Home(props: PageProps<"/">) {
+export default function Home() {
   if (process.env.VERCEL_ENV === "production" && !publicSupabaseOriginAllowed(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_PRODUCTION_PROJECT_REF,
@@ -14,5 +14,5 @@ export default function Home(props: PageProps<"/">) {
     </main>;
   }
 
-  return <Suspense fallback={<p role="status">Carregando municípios e relatos…</p>}><HomeConteudo searchParams={props.searchParams} /></Suspense>;
+  return <Suspense fallback={<p role="status">Carregando municípios e relatos…</p>}><HomeConteudo /></Suspense>;
 }

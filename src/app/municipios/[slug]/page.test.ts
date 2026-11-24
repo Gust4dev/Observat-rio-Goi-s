@@ -22,3 +22,10 @@ it("slug ausente retorna 404 antes da lista", async () => {
  obter.mockResolvedValue(null);
  await expect(Pagina(props)).rejects.toMatchObject({digest:"NEXT_HTTP_ERROR_FALLBACK;404"});
 });
+it("ramo ativo oferece o CTA de registro com o município selecionado", async () => {
+ obter.mockResolvedValue({slug:"anapolis",nome:"Anápolis",total:4,ativo_acompanhamento:true});
+ const ativo = await Pagina({ ...props, params: Promise.resolve({slug:"anapolis"}) });
+ const cta = renderToStaticMarkup(createElement("div", {}, ativo.props.children[1]));
+ expect(cta).toContain("Registrar um problema");
+ expect(cta).toContain('href="/registrar?municipio=anapolis"');
+});

@@ -1,4 +1,3 @@
-import catalogo from './municipios.json';
 export type PainelMunicipio = { estado: 'disponivel'; total: number; ativoAcompanhamento: boolean } | { estado: 'indisponivel' } | { estado: 'carregando' };
 export type Ponto = [number, number];
 /** Decode only the local generated SVG's M/l/Z subset; no third-party markup is inserted. */
@@ -26,10 +25,6 @@ export function pontoInterior(rings:Ponto[][]):{x:number;y:number;raio:number} {
  }
  return best;
 }
-export function destinoMunicipio(action:string,slug:string,query=''):string|null {
- if(!catalogo.some(m=>m.slug===slug))return null;
- const params=new URLSearchParams(query);params.set('municipio',slug);return `${action}?${params}#territorio`;
-}
 export function textoPainel(painel:PainelMunicipio):string {
  if(painel.estado==='indisponivel')return 'Dados indisponíveis. Tente novamente mais tarde.';
  if(painel.estado==='carregando')return 'Carregando dados do município…';
@@ -39,16 +34,4 @@ export function textoPainel(painel:PainelMunicipio):string {
  if(total===0)return 'Não há dados agregados exibíveis para este município.';
  const relatos = total === 1 ? 'relato' : 'relatos';
  return `${!painel.ativoAcompanhamento?'Ainda não acompanhamos este município. ':''}${total} ${relatos} nos indicadores públicos.`;
-}
-
-export function estadoVisualMunicipio(
-  slug: string,
-  selecionado: string,
-  candidato: string | undefined,
-  sobPonteiro: string | undefined,
-): 'selecionado' | 'candidato' | 'hover' | 'padrao' {
-  if (slug === selecionado) return 'selecionado';
-  if (slug === candidato) return 'candidato';
-  if (slug === sobPonteiro) return 'hover';
-  return 'padrao';
 }
