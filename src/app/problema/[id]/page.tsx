@@ -7,7 +7,7 @@ import { LinhaDoTempo } from "@/components/LinhaDoTempo";
 import { SeloConferencia, SeloSituacao } from "@/components/SeloSituacao";
 import { SeloDemonstracao } from "@/components/SeloDemonstracao";
 import { RespostaOficial } from "@/components/RespostaOficial";
-import { ParticipacaoRelato } from "@/components/ParticipacaoRelato";
+import { ContagemAfeta, ParticipacaoRelato } from "@/components/ParticipacaoRelato";
 import { participacaoProtegidaVercel } from "@/lib/registro/staging";
 import { obterProblema, urlImagem } from "@/lib/dados/consultas";
 import { formatarData } from "@/lib/formato";
@@ -71,8 +71,8 @@ export default async function PaginaProblema(props: PageProps<"/problema/[id]">)
     <section aria-labelledby="titulo-linha" className="flex flex-col gap-3"><h2 id="titulo-linha">Atualizações</h2><LinhaDoTempo itens={atualizacoes.map(a => ({ id: a.id, tipo: a.tipo, situacaoNova: a.situacao_nova, texto: a.texto, evidencia: a.evidencia, criadoEm: a.criado_em }))} /></section>
     <section aria-labelledby="titulo-acoes" className="flex flex-col gap-3"><h2 id="titulo-acoes">Acompanhe este relato</h2>
       {url ? <a className="inline-flex min-h-12 items-center justify-center rounded-lg bg-acao px-4 py-3 text-acao-texto" href={`https://wa.me/?text=${encodeURIComponent(url)}`} rel="noopener noreferrer">Compartilhar no WhatsApp</a> : <p>Compartilhamento indisponível enquanto o endereço público não estiver configurado.</p>}
-      <p>Também me afeta: {p.confirmacoes_total}. A contagem não mede gravidade nem quantidade total de pessoas afetadas.</p>
-      {participacaoProtegidaVercel() ? <ParticipacaoRelato id={p.id} afeta={process.env.AFETA_HABILITADO === "true"} /> : <>
+      {participacaoProtegidaVercel() ? <ParticipacaoRelato key={p.id} id={p.id} afeta={process.env.AFETA_HABILITADO === "true"} totalInicial={p.confirmacoes_total} /> : <>
+      <ContagemAfeta total={p.confirmacoes_total} />
       <button type="button" disabled aria-describedby="acoes-indisponiveis" className="min-h-12 rounded-lg border border-borda px-4">Também me afeta — indisponível</button>
       <button type="button" disabled aria-describedby="acoes-indisponiveis" className="min-h-12 rounded-lg border border-borda px-4">Sinalizar este relato — indisponível</button>
       <p id="acoes-indisponiveis" className="text-sm text-texto-suave">Estas ações aguardam implementação e definição das regras de privacidade.</p>

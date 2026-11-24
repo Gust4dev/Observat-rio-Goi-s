@@ -92,6 +92,7 @@ export async function consultar<T>(
   recurso: Recurso,
   opcoes: OpcoesConsulta,
   schema: ZodType<T>,
+  transporte?: { cache: "no-store"; timeoutMs: number },
 ): Promise<T[]> {
   if (!(RECURSOS_PERMITIDOS as readonly string[]).includes(recurso)) {
     throw new Error(`recurso não permitido: ${recurso}`);
@@ -104,7 +105,8 @@ export async function consultar<T>(
     resposta = await fetch(url, {
       method: "GET",
       headers: { ...supabaseApiHeaders(chave), Accept: "application/json" },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      cache: transporte?.cache,
+      signal: AbortSignal.timeout(transporte?.timeoutMs ?? TIMEOUT_MS),
     });
   } catch (e) {
     throw new ErroRest(`falha de rede ao consultar ${recurso}: ${(e as Error).name}`, recurso);

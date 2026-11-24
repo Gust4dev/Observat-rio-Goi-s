@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 const motivos = [
@@ -9,13 +9,22 @@ const motivos = [
   ["duplicado", "Relato duplicado"], ["outro", "Outro motivo"],
 ];
 
-export function ParticipacaoRelato({ id, afeta }: { id: string; afeta: boolean }) {
+export function ContagemAfeta({ total }: { total: number }) {
+  return <p>Também me afeta: {total}. A contagem não mede gravidade nem quantidade total de pessoas afetadas.</p>;
+}
+
+export function ParticipacaoRelato({ id, afeta, totalInicial }: { id: string; afeta: boolean; totalInicial: number }) {
   const router = useRouter();
+  const envioEmCurso = useRef(false);
+  const afetaConfirmado = useRef(false);
   const [ocupado, setOcupado] = useState(false);
+  const [confirmado, setConfirmado] = useState(false);
+  const [totalConfirmado, setTotalConfirmado] = useState<number | null>(null);
   const [mensagem, setMensagem] = useState("");
 
   async function enviar(rota: "afeta" | "denunciar" | "resposta", dados: Record<string, unknown>) {
-    if (ocupado) return;
+    if (envioEmCurso.current || (rota === "afeta" && afetaConfirmado.current)) return;
+    envioEmCurso.current = true;
     setOcupado(true);
     setMensagem("");
     try {
@@ -26,13 +35,21 @@ export function ParticipacaoRelato({ id, afeta }: { id: string; afeta: boolean }
       });
       if (resposta.status === 202) {
         setMensagem(rota === "afeta" ? "Confirmação recebida." : "Envio recebido para revisão.");
-        if (rota === "afeta") router.refresh();
+        if (rota === "afeta") {
+          afetaConfirmado.current = true;
+          setConfirmado(true);
+          const corpo = await resposta.json().catch(() => null) as { confirmacoes_total?: unknown } | null;
+          const total = corpo?.confirmacoes_total;
+          if (typeof total === "number" && Number.isSafeInteger(total) && total >= 0) setTotalConfirmado(total);
+          router.refresh();
+        }
       } else {
         setMensagem(resposta.status === 429 ? "Muitos envios. Aguarde para tentar novamente." : "Não foi possível concluir o envio. Confira os dados e tente novamente.");
       }
     } catch {
       setMensagem("Não foi possível confirmar o envio. Tente novamente com os mesmos dados.");
     } finally {
+      envioEmCurso.current = false;
       setOcupado(false);
     }
   }
@@ -46,8 +63,10 @@ export function ParticipacaoRelato({ id, afeta }: { id: string; afeta: boolean }
     void enviar(rota, dados);
   }
 
-  return <div className="space-y-4 rounded-lg border border-borda p-4">
-    {afeta && <button type="button" disabled={ocupado} className="min-h-12 underline" onClick={() => void enviar("afeta", {})}>Também me afeta</button>}
+  return <>
+    <ContagemAfeta total={Math.max(totalInicial, totalConfirmado ?? totalInicial)} />
+    <div className="space-y-4 rounded-lg border border-borda p-4">
+    {afeta && <button type="button" disabled={ocupado || confirmado} className="min-h-12 underline" onClick={() => void enviar("afeta", {})}>Também me afeta</button>}
     <details>
       <summary className="cursor-pointer py-2 font-semibold">Sinalizar este relato</summary>
       <form method="post" action="/api/denunciar" className="space-y-3" onSubmit={evento => enviarFormulario(evento, "denunciar")}>
@@ -66,5 +85,6 @@ export function ParticipacaoRelato({ id, afeta }: { id: string; afeta: boolean }
       </form>
     </details>
     <p role="status">{mensagem}</p>
-  </div>;
+    </div>
+  </>;
 }

@@ -8,6 +8,7 @@ import { configServidor, rpc } from "./servidor";
 import { exigirStaging, participacaoProtegidaVercel } from "./staging";
 import { criarLoggerRequisicao } from "../observabilidade/logger";
 import { supabaseApiHeaders } from "../supabase-keys.mjs";
+import { consultar } from "../dados/rest";
 
 type Operacao = "denunciar" | "resposta" | "afeta";
 type Config = ReturnType<typeof configServidor>;
@@ -23,6 +24,7 @@ const comum = { ocorrencia_id: z.uuid(), turnstile: z.string().trim().min(1).max
 export const denunciaSchema = z.strictObject({ ...comum, motivo: z.enum(["dado_pessoal", "acusacao_sem_base", "ameaca", "conteudo_ilegal", "spam", "duplicado", "outro"]), texto: texto(1, 1000).optional() });
 export const respostaSchema = z.strictObject({ ...comum, vinculo: texto(2, 120), contato: texto(3, 254), texto: texto(10, 4000) });
 const afetaSchema = z.strictObject(comum);
+const totalConfirmacoesSchema = z.object({ confirmacoes_total: z.int().nonnegative() });
 
 function maximo(operacao: Operacao) {
   const variavel = { denunciar: "LIMITE_DENUNCIA_MAXIMO", resposta: "LIMITE_RESPOSTA_MAXIMO", afeta: "LIMITE_AFETA_MAXIMO" }[operacao];
@@ -111,6 +113,13 @@ export async function confirmarAfeta(request: Request) {
     const chave = hmacSha256(config.hmacSegredo, JSON.stringify(["confirmacao-v1", entrada.ocorrencia_id, origem]));
     const inserida = await rpc("registrar_confirmacao", { p_ocorrencia_id: entrada.ocorrencia_id, p_chave_hash: bytea(chave) }, z.boolean(), config);
     if (inserida) revalidateTag(`problema:${entrada.ocorrencia_id}`, { expire: 0 });
-    return concluir(respostaPrivada({ confirmacao: "Confirmação recebida." }, 202), logger, inicio);
+    // O mesmo agregado público é consultado no primeiro envio e em retries.
+    // Se a leitura falhar, preservamos o aceite da escrita e omitimos o total.
+    const [agregado] = await consultar("v_ocorrencias_publicas", {
+      select: ["confirmacoes_total"],
+      filtros: [["id", `eq.${entrada.ocorrencia_id}`]],
+      limite: 1,
+    }, totalConfirmacoesSchema, { cache: "no-store", timeoutMs: 1500 }).catch(() => []);
+    return concluir(respostaPrivada({ confirmacao: "Confirmação recebida.", ...agregado }, 202), logger, inicio);
   } catch (erro) { return concluir(falha(erro), logger, inicio); }
 }

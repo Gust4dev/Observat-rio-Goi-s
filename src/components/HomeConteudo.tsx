@@ -8,10 +8,11 @@ import { PassosInicio } from "./PassosInicio";
 import { indicadoresGerais, listarMunicipios, obterMunicipio, ultimosProblemas } from "@/lib/dados/consultas";
 import { lerFiltros, type SearchParamsBrutos } from "@/lib/dados/params";
 import type { PainelMunicipio } from "@/lib/mapa/geometria";
+import catalogoMapa from "@/lib/mapa/municipios.json";
 
 /** Conteúdo dependente da URL: renderizar sob Suspense com Cache Components. */
 export async function HomeConteudo({ searchParams }: { searchParams: Promise<SearchParamsBrutos> }) {
-  const [sp, municipios, indicadores, recentes] = await Promise.all([searchParams, listarMunicipios(), indicadoresGerais().catch(() => undefined), ultimosProblemas(5).catch(() => null)]);
+  const [sp, municipios, indicadores, recentes] = await Promise.all([searchParams, listarMunicipios().catch(() => catalogoMapa), indicadoresGerais().catch(() => undefined), ultimosProblemas(5).catch(() => null)]);
   const demonstracao = process.env.VERCEL_ENV !== "production";
   const selecionado = municipios.find(m => m.slug === lerFiltros(sp).municipio);
   let painel: PainelMunicipio = { estado: "indisponivel" };

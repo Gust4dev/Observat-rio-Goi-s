@@ -1,10 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 afterEach(() => vi.unstubAllEnvs());
-const dados = vi.hoisted(() => ({ indicadores: vi.fn(), recentes: vi.fn(), municipio: vi.fn() }));
+const dados = vi.hoisted(() => ({ indicadores: vi.fn(), recentes: vi.fn(), municipio: vi.fn(), catalogo: vi.fn() }));
 beforeEach(() => { dados.indicadores.mockResolvedValue(null); dados.recentes.mockResolvedValue([]); dados.municipio.mockReset(); dados.municipio.mockResolvedValue({slug:"goiania",nome:"Goiânia",total:3,ativo_acompanhamento:true}); });
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {} }) }));
-vi.mock("@/lib/dados/consultas", async (original) => ({ ...await original<typeof import("@/lib/dados/consultas")>(), listarMunicipios: async () => (await import("@/lib/mapa/municipios.json")).default, obterMunicipio: dados.municipio, indicadoresGerais: dados.indicadores, ultimosProblemas: dados.recentes }));
+beforeEach(() => dados.catalogo.mockImplementation(async () => (await import("@/lib/mapa/municipios.json")).default));
+vi.mock("@/lib/dados/consultas", async (original) => ({ ...await original<typeof import("@/lib/dados/consultas")>(), listarMunicipios: dados.catalogo, obterMunicipio: dados.municipio, indicadoresGerais: dados.indicadores, ultimosProblemas: dados.recentes }));
 import { HomeConteudo } from "./HomeConteudo";
 describe("home sem JavaScript", () => {
  it("oferece os 246 municípios em um só seletor GET e mantém município nos dois destinos", async () => {
@@ -45,6 +46,14 @@ describe("home sem JavaScript", () => {
   const html = renderToStaticMarkup(await HomeConteudo({searchParams:Promise.resolve({})}));
   expect(html).toContain("Relatos recentes indisponíveis no momento");
   expect(html).not.toContain("Ainda não há relatos publicados");
+ });
+ it("mantém os destinos do município quando o catálogo remoto falha", async () => {
+  dados.catalogo.mockRejectedValueOnce(new Error("catálogo indisponível"));
+  dados.municipio.mockRejectedValueOnce(new Error("agregado indisponível"));
+  const html = renderToStaticMarkup(await HomeConteudo({searchParams:Promise.resolve({municipio:"goiania"})}));
+  expect(html).toContain('href="/registrar?municipio=goiania"');
+  expect(html).toContain('href="/problemas?municipio=goiania"');
+  expect(html).toContain("Dados indisponíveis");
  });
  it("mostra relatos da Production sem selo demonstrativo", async () => {
   vi.stubEnv("VERCEL_ENV", "production");
