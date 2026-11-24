@@ -7,6 +7,10 @@ const titulo = /^(feat|fix|revert|refactor|chore|docs): (\S.*)$/u;
 // Valida a estrutura; equivalência da tradução e particípios exigem leitura humana.
 export function validarCommit(mensagem) {
   const linhas = mensagem.replace(/\r\n/g, "\n").trim().split("\n");
+  // Regra do projeto: nenhum commit leva coautoria, seja de pessoa ou de IA (Claude, Codex, Copilot etc.).
+  if (linhas.some((linha) => /co-authored-by\s*:/iu.test(linha))) {
+    throw new Error("Commits deste projeto não levam 'Co-Authored-By', independentemente de quem (ou qual IA) os escreveu. Remova a linha.");
+  }
   const separadores = linhas.flatMap((linha, indice) => linha === "EN" ? [indice] : []);
   if (separadores.length !== 1) {
     throw new Error("A mensagem deve conter exatamente uma linha EN isolada.");

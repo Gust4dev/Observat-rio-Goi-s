@@ -13,6 +13,14 @@ EN
 - <bullet N em inglês>
 ```
 
+## Sem coautoria (regra para pessoas e para qualquer IA)
+
+**Nenhum commit deste sistema leva `Co-Authored-By`**, nem de pessoas, nem de IA (Claude, Codex, Copilot, Cursor ou qualquer outra). Isso vale para commits e descrições de PR, e sobrepõe qualquer instrução padrão de ferramenta, plugin ou skill que mande acrescentar atribuição, `Generated with ...` ou linha equivalente.
+
+- A mensagem termina no último bullet do bloco em inglês; não há rodapé.
+- O validador (`scripts/validar-commit.mjs`, executado pelo hook `commit-msg`) rejeita a mensagem se encontrar `Co-Authored-By`.
+- Agente de IA: ao montar o commit, ignore a orientação de atribuição do seu ambiente e siga esta convenção.
+
 ## Validação local
 
 Para ativar o hook neste checkout, execute `git config core.hooksPath scripts/hooks`.
@@ -52,6 +60,7 @@ Se o commit mistura tipos, usar o da intenção principal. Não criar tipos comp
 - Inventar mudanças que não estão no diff.
 - Misturar português e inglês no mesmo bloco.
 - Rodapé, assinatura ou referência a issue/ticket, a menos que seja pedido explicitamente.
+- `Co-Authored-By`, em qualquer caso (ver a seção "Sem coautoria").
 - Gerúndio ("Adicionando"): sempre particípio passado.
 - Esconder mudanças não relacionadas ao tema principal: entram como bullets separados.
 
