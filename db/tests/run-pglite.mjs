@@ -72,6 +72,8 @@ await db.exec(await ler('../025_escala_fila_admin.sql'));
 await db.exec(await ler('../026_fila_pos_publicacao.sql'));
 await db.exec(await ler('migracao_026_test.sql'));
 console.log('ok    migracao_026_test.sql');
+await db.exec(await ler('../027_dados_gerados.sql'));
+console.log('ok    027_dados_gerados.sql');
 try {
   const n = await verificarColunasViews(db, path.join(dir, '../colunas-publicas.json'));
   console.log('ok   ', 'colunas-views (' + n + ' views)');
@@ -128,6 +130,33 @@ try {
     falha(e.message);
   } finally {
     await sdb.close();
+  }
+}
+
+// ---- 027 + seed gerado em banco novo (cadeia completa), idempotência e remoção
+{
+  const falha = (m) => { console.error('FALHA em dados gerados ->', m); process.exit(1); };
+  const gdb = new PGlite();
+  try {
+    for (const f of arquivos) await gdb.exec(await ler(f));
+    for (const f of ['../018_admin_operacoes.sql','../019_supressao_indicadores.sql','../020_retencao_imagens.sql','../021_fila_moderacao_filtros.sql',
+      '../022_deduplicacao_participacao.sql','../023_totais_indicadores_suprimidos.sql','../024_auditoria_anonymizacao_admin.sql',
+      '../025_escala_fila_admin.sql','../026_fila_pos_publicacao.sql','../027_dados_gerados.sql','../008_seed_municipios.sql']) await gdb.exec(await ler(f));
+    await gdb.exec(await ler('../seed/demonstracao_gerada.sql'));
+    const n1 = Number((await gdb.query('select count(*) as n from public.ocorrencias')).rows[0].n);
+    await gdb.exec(await ler('../seed/demonstracao_gerada.sql'));
+    const n2 = Number((await gdb.query('select count(*) as n from public.ocorrencias')).rows[0].n);
+    if (n1 !== n2) falha(`reexecução do seed duplicou: ${n1} -> ${n2}`);
+    await gdb.exec(await ler('demonstracao_gerada_test.sql'));
+    console.log('ok   ', 'demonstracao_gerada_test.sql (+ idempotência)', n1, 'relatos');
+    await gdb.exec(await ler('remocao_gerados_test.sql'));
+    await gdb.exec(await ler('../seed/remover_gerados.sql'));
+    await gdb.exec(await ler('remocao_gerados_depois_test.sql'));
+    console.log('ok   ', 'remover_gerados.sql');
+  } catch (e) {
+    falha(e.message);
+  } finally {
+    await gdb.close();
   }
 }
 

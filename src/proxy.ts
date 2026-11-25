@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-
 const NOINDEX = "noindex, nofollow";
 
 function comparar(a: string, b: string): boolean {
@@ -41,7 +40,7 @@ function credenciaisDe(request: NextRequest): [string, string] | null {
   }
 }
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // Vercel Cron sends Bearer CRON_SECRET; this exact handler verifies it itself.
   if (request.nextUrl.pathname === "/api/cron/limpar-quarentena") return prosseguir();
   // A proteção global é exclusiva do Preview; as rotas mantêm seus próprios gates.

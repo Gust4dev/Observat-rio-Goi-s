@@ -80,3 +80,29 @@ it("não exige ref Production no Preview", async () => {
   await expect(consultar("municipios", query, schema)).resolves.toEqual([{ id: "publico" }]);
   expect(fetch).toHaveBeenCalledOnce();
 });
+
+it("usa credencial exclusiva do servidor somente na leitura de demonstração", async () => {
+  vi.stubEnv("VERCEL_ENV", "preview");
+  vi.stubEnv("SUPABASE_SECRET_KEY", "sb_secret_teste");
+  const recurso = "v_ocorrencias_publicas";
+
+  await consultar(recurso, query, schema);
+  await consultar(recurso, { ...query, gerados: true }, schema);
+
+  expect(fetch).toHaveBeenNthCalledWith(1, expect.any(String), expect.objectContaining({
+    headers: { apikey: "sb_publishable_test", Accept: "application/json" },
+  }));
+  expect(fetch).toHaveBeenNthCalledWith(2, expect.any(String), expect.objectContaining({
+    headers: { apikey: "sb_secret_teste", Accept: "application/json", "x-modo-gerados": "1" },
+    cache: "no-store", redirect: "error",
+  }));
+});
+
+it("não rebaixa a leitura de demonstração para uma chave pública sem credencial de servidor", async () => {
+  vi.stubEnv("VERCEL_ENV", "preview");
+  vi.stubEnv("SUPABASE_SECRET_KEY", "");
+  vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
+
+  await expect(consultar("v_ocorrencias_publicas", { ...query, gerados: true }, schema)).rejects.toThrow();
+  expect(fetch).not.toHaveBeenCalled();
+});

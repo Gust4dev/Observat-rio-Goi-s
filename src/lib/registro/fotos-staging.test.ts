@@ -17,6 +17,14 @@ it("detecta schema antigo mesmo com view vazia e não escreve", async () => {
 it("rejeita caminho privado ainda exposto mesmo em view vazia", async () => {
  await expect(verificarStagingFotos(config,async()=>Response.json([]))).rejects.toThrow("caminho_storage");
 });
+it("bloqueia o app fora do loopback antes de enviar credenciais", async () => {
+ let chamadas=0;
+ await expect(executarCicloFotos({...config,app:"https://app.example",adminToken:"temporario",hmac:"x".repeat(32)},async()=>{
+  chamadas++;
+  return Response.json([]);
+ })).rejects.toThrow("loopback");
+ expect(chamadas).toBe(0);
+});
 it("limpa objeto criado por upload com resposta de falha e anonimiza a fixture no finally", async () => {
  const user="22222222-2222-4222-8222-222222222222",oc="11111111-1111-4111-8111-111111111111";
  const token=`header.${Buffer.from(JSON.stringify({sub:user,aal:"aal2"})).toString("base64url")}.sig`;
@@ -27,6 +35,7 @@ it("limpa objeto criado por upload com resposta de falha e anonimiza a fixture n
   if(url.pathname==="/auth/v1/user")return Response.json({id:user});
   if(url.pathname.endsWith("/municipios")||url.pathname.endsWith("/categorias"))return Response.json([{id:1}]);
   if(url.pathname.endsWith("/rpc/registrar_ocorrencia"))return Response.json([{out_id:oc}]);
+  if(url.pathname.endsWith("/rpc/admin_detalhar_ocorrencia"))return Response.json({ocorrencia:{versao_admin:1}});
   if(url.pathname.endsWith("/rpc/admin_moderar_ocorrencia"))return Response.json(null);
   if(url.pathname==="/api/imagem")return new Response(null,{status:503});
   if(url.pathname.includes("/object/list/"))return Response.json(objeto?[{id:oc,name:`${"c".repeat(64)}.jpg`}]:[]);

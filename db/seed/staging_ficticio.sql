@@ -11,7 +11,7 @@ do $$
 begin
   -- Tolera apenas o resíduo anonimizado de uma exclusão a pedido do titular (teste ponta a ponta):
   -- a linha fica como 'removido' por desenho (auditoria somente-inserção) e não é dado real.
-  if exists (select 1 from public.ocorrencias o where o.protocolo not like 'TESTE-%'
+  if exists (select 1 from public.ocorrencias o where o.protocolo not like 'TESTE-%' and o.protocolo not like 'GERADO-%'
              and not (o.moderacao = 'removido' and o.motivo_remocao = 'Exclusão solicitada pelo titular')) then
     raise exception 'TRAVA DO SEED: existem ocorrências que não são de teste; abortando (nunca rodar em produção).';
   end if;
@@ -106,3 +106,13 @@ select o.id, a.tipo::public.tipo_atualizacao, a.texto, a.evidencia, a.publica, o
   ) as a(protocolo, tipo, texto, evidencia, publica, dia)
   join public.ocorrencias o on o.protocolo = a.protocolo
  where not exists (select 1 from public.atualizacoes x where x.ocorrencia_id = o.id and x.texto = a.texto);
+
+-- ---------------------------------------------------------------- marca como GERADO (a partir da 027)
+-- Dinâmico para continuar rodando em bancos que ainda não têm a coluna `gerado`.
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'ocorrencias' and column_name = 'gerado') then
+    execute $q$update public.ocorrencias set gerado = true where protocolo like 'TESTE-%' and not gerado$q$;
+  end if;
+end $$;

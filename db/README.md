@@ -118,6 +118,16 @@ Aplicar `012_dados_painel.sql` após 011: corrige resolução documentada (situa
 
 Configure `DADOS_DEMONSTRACAO=true` somente no ambiente com seed fictício confirmado; ausência da variável não presume demonstração. Não altera a fonte de dados.
 
+### Dados gerados e interruptor de dados fictícios (027)
+
+Relatos fictícios de demonstração ficam no **mesmo banco** dos reais, marcados com `ocorrencias.gerado = true` (e protocolo `GERADO-…`, título `[GERADO] …`). As views públicas só os expõem quando a requisição traz o cabeçalho `x-modo-gerados: 1`; sem ele (padrão) o site mostra só relatos criados por pessoas. Os indicadores e o painel herdam o filtro (derivam de `v_dados_painel`).
+
+- **Aplicar 027 antes de publicar o código que a usa** (o app lê a coluna `gerado` e envia o cabeçalho).
+- Popular: `db/seed/demonstracao_gerada.sql` (~1.750 relatos, idempotente; exige 006, 008 e 027). Os municípios grandes recebem blocos de 5 a 7 relatos por município/categoria/situação/mês para não serem escondidos pela supressão k=5 (019).
+- Remover tudo de uma vez: `db/seed/remover_gerados.sql` (apaga relatos gerados e dependentes, religa os gatilhos de auditoria; relatos de pessoas não são tocados).
+- **No app há um só interruptor, igual em qualquer ambiente** (sem versão staging/produção diferente). Variável `MODO_ADMIN_SEGREDO` (16+ caracteres). `/?admin=<segredo>` habilita o interruptor e liga os dados fictícios (cookie de 12 h; a URL é limpa por redirecionamento). A faixa no topo liga/desliga (`?ficticios=1|0`) e `?admin=sair` encerra. Desligado (padrão e para quem não abriu `?admin`), só aparecem relatos de pessoas.
+- Listas, mapa, painel, indicadores e exportação seguem o interruptor; o link direto de um relato gerado abre mesmo desligado, com o selo "Dados gerados (fictícios)".
+
 ### Operações administrativas (018)
 
 Aplicar `018_admin_operacoes.sql` após 017. Todas as RPCs exigem sessão autenticada, administrador ativo e AAL2. A assinatura antiga de `admin_moderar_ocorrencia(uuid,text,text)` é removida; a nova recebe `p_id`, `p_acao`, `p_motivo` (complemento) e `p_motivo_codigo` (somente remoção). O código pertence à tabela fechada `motivos_remocao`; remoção exige código e complemento. Registros históricos e exclusão pelo titular preservam seus motivos anteriores.

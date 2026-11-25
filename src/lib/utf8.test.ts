@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { extname, join } from "node:path";
 import { expect, it } from "vitest";
 
@@ -12,7 +12,7 @@ it("rejeita sequências de bytes inválidas em UTF-8", () => {
 it("mantém todos os arquivos de texto rastreados em UTF-8 válido", () => {
   const raiz = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
   const arquivos = execFileSync("git", ["ls-files", "-z"], { cwd: raiz, encoding: "utf8" })
-    .split("\0").filter((arquivo) => extensoes.has(extname(arquivo)));
+    .split("\0").filter((arquivo) => extensoes.has(extname(arquivo)) && existsSync(join(raiz, arquivo)));
   expect(arquivos.length).toBeGreaterThan(0);
   const invalidos = arquivos.filter((arquivo) => {
     const bytes = readFileSync(join(raiz, arquivo));

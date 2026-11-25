@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import { AvisoMetodologico } from "@/components/AvisoMetodologico";
 import { CarregandoLista, ListaProblemas } from "@/components/ListaProblemas";
 import { obterMunicipio } from "@/lib/dados/consultas";
-import { textoPainel } from "@/lib/mapa/geometria";
+import { TextoPainelMunicipio } from "@/components/TextoPainelMunicipio";
 
 // Valor de exemplo só para o Next validar a rota em tempo de build; slugs reais são
 // renderizados sob demanda. É inválido de propósito (não consulta o banco).
@@ -41,9 +41,7 @@ export default async function PaginaMunicipio(props: PageProps<"/municipios/[slu
     <div className="flex flex-col gap-5">
       <header>
         <h1>{m.nome}</h1>
-        <p className="mt-2 text-texto-suave">
-          {textoPainel({ estado: "disponivel", total: m.total, ativoAcompanhamento: true })}
-        </p>
+        <Suspense fallback={null}><TextoPainelMunicipio slug={m.slug} /></Suspense>
       </header>
       <Link href={`/registrar?municipio=${m.slug}`} prefetch={false} className={CLASSE_CTA_REGISTRO}>
         Registrar um problema

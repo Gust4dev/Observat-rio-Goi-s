@@ -15,7 +15,8 @@
     "publicado_em",
     "atualizado_em",
     "confirmacoes_total",
-    "tem_resposta_oficial"
+    "tem_resposta_oficial",
+    "gerado"
   ],
   "v_imagens_publicas": [
     "id",

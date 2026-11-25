@@ -4,6 +4,7 @@ import { expect, it, vi } from "vitest";
 const obter = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/dados/consultas", () => ({ obterMunicipio: obter }));
 import Pagina from "./page";
+import { TextoPainelMunicipio } from "@/components/TextoPainelMunicipio";
 const props = { params: Promise.resolve({slug:"goiania"}), searchParams: Promise.resolve({}) };
 it("separa município acompanhado vazio do município sem acompanhamento e preserva seleção no CTA", async () => {
  obter.mockResolvedValue({slug:"goiania",nome:"Goiânia",total:0,ativo_acompanhamento:false});
@@ -13,10 +14,12 @@ it("separa município acompanhado vazio do município sem acompanhamento e prese
  expect(html).not.toContain("Carregando relatos");
  obter.mockResolvedValue({slug:"goiania",nome:"Goiânia",total:0,ativo_acompanhamento:true});
  const ativo = await Pagina(props);
- // O cabeçalho é SSR síncrono; a lista permanece dentro da fronteira Suspense real.
+ // O cabeçalho é SSR síncrono; o texto do total depende do modo (cookie) e a lista fica em Suspense.
  const cabecalho = renderToStaticMarkup(createElement("div", {}, ativo.props.children[0]));
- expect(cabecalho).toContain("Não há dados agregados exibíveis para este município.");
- expect(cabecalho).not.toContain("Sem relatos publicados");
+ expect(cabecalho).toContain("<h1>Goiânia</h1>");
+ const texto = renderToStaticMarkup(await TextoPainelMunicipio({ slug: "goiania" }));
+ expect(texto).toContain("Não há dados agregados exibíveis para este município.");
+ expect(texto).not.toContain("Sem relatos publicados");
 });
 it("slug ausente retorna 404 antes da lista", async () => {
  obter.mockResolvedValue(null);

@@ -46,21 +46,21 @@ describe("home", () => {
   expect(html).toContain("Relatos recentes indisponíveis no momento");
   expect(html).not.toContain("Ainda não há relatos publicados");
  });
- it("mostra relatos da Production sem selo demonstrativo", async () => {
-  vi.stubEnv("VERCEL_ENV", "production");
+ it("com os dados fictícios desligados mostra os relatos sem selo", async () => {
+  vi.stubEnv("MODO_TESTE_FICTICIOS", "0");
   dados.recentes.mockResolvedValueOnce([{id:"00000000-0000-4000-8000-000000000001",titulo:"Relato público",municipio_slug:"goiania",municipio_nome:"Goiânia",categoria_slug:"outros",categoria_nome:"Outros",situacao:"registrado",publicado_em:"2026-10-20T12:00:00Z",tem_resposta_oficial:false}]);
   const html = renderToStaticMarkup(await HomeConteudo());
   expect(html).toContain("Relato público");
-  expect(html).not.toContain("Dados de demonstração");
+  expect(html).not.toContain("Dados gerados (fictícios)");
  });
 });
 
 
 it("rotula métricas e relatos fictícios e apresenta método antes das contagens", async () => {
  dados.indicadores.mockResolvedValue({total_ocorrencias:7,municipios_com_registros:2,com_resposta_oficial:1,resolvidas_documentadas:0});
- dados.recentes.mockResolvedValue([{id:"00000000-0000-4000-8000-000000000001",titulo:"Relato de teste",municipio_slug:"cidade-2",municipio_nome:"Cidade 2",categoria_slug:"outros",categoria_nome:"Outros",situacao:"recebido",publicado_em:"2026-10-20T12:00:00Z",tem_resposta_oficial:false}]);
+ dados.recentes.mockResolvedValue([{id:"00000000-0000-4000-8000-000000000001",titulo:"Relato de teste",municipio_slug:"cidade-2",municipio_nome:"Cidade 2",categoria_slug:"outros",categoria_nome:"Outros",situacao:"recebido",publicado_em:"2026-10-20T12:00:00Z",tem_resposta_oficial:false,gerado:true}]);
  const html = renderToStaticMarkup(await HomeConteudo());
- expect(html.match(/Dados de demonstração/g)).toHaveLength(3);
+ expect(html.match(/Dados gerados \(fictícios\)/g)).toHaveLength(3);
  expect(html.indexOf("Como ler")).toBeLessThan(html.indexOf("<dd"));
  expect(html).toContain("Os totais consideram apenas os grupos que podem ser divulgados.");
  expect(html).toContain("Relato de teste");
@@ -69,11 +69,11 @@ it("rotula métricas e relatos fictícios e apresenta método antes das contagen
 
 it("mostra cinco relatos recentes com categoria e rótulos demonstrativos, antes de Como funciona", async () => {
  dados.indicadores.mockResolvedValue({total_ocorrencias:7,municipios_com_registros:2,com_resposta_oficial:1,resolvidas_documentadas:0});
- dados.recentes.mockResolvedValue([1,2,3,4,5].map(n => ({id:`00000000-0000-4000-8000-00000000000${n}`,titulo:`Relato ${n}`,municipio_slug:"goiania",municipio_nome:"Goiânia",categoria_slug:"saude",categoria_nome:"Saúde",situacao:"recebido",publicado_em:"2026-10-20T12:00:00Z",tem_resposta_oficial:false})));
+ dados.recentes.mockResolvedValue([1,2,3,4,5].map(n => ({id:`00000000-0000-4000-8000-00000000000${n}`,titulo:`Relato ${n}`,municipio_slug:"goiania",municipio_nome:"Goiânia",categoria_slug:"saude",categoria_nome:"Saúde",situacao:"recebido",publicado_em:"2026-10-20T12:00:00Z",tem_resposta_oficial:false,gerado:true})));
  const html = renderToStaticMarkup(await HomeConteudo());
  expect(html.match(/<article /g)).toHaveLength(5);
  expect(html).toContain("Saúde");
- expect(html.match(/Dados de demonstração/g)!.length).toBeGreaterThanOrEqual(6);
+ expect(html.match(/Dados gerados \(fictícios\)/g)!.length).toBeGreaterThanOrEqual(6);
  expect(html).toContain("Ver todos os relatos");
  expect(html).not.toContain("list-decimal");
  expect(html.indexOf("Relatos recentes")).toBeLessThan(html.indexOf("Como funciona"));

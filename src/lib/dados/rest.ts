@@ -42,6 +42,8 @@ export type OpcoesConsulta = {
   filtros?: readonly (readonly [string, string])[];
   ordem?: readonly { coluna: string; direcao: "asc" | "desc" }[];
   limite?: number;
+  /** Pede também os relatos gerados (demonstração): cabeçalho x-modo-gerados; ignorado em montarQuery. */
+  gerados?: boolean;
 };
 
 /** Pura (sem rede). Lança se receber select inseguro. */
@@ -73,9 +75,10 @@ export function montarQuery(o: OpcoesConsulta): URLSearchParams {
   return q;
 }
 
-function config(): { base: string; chave: string } {
+function config(gerados = false): { base: string; chave: string } {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const { publicKey: chave } = resolveSupabaseKeys(process.env);
+  const { publicKey, secretKey } = resolveSupabaseKeys(process.env);
+  const chave = gerados ? secretKey : publicKey;
   if (!url) throw new Error("Variável de ambiente ausente: NEXT_PUBLIC_SUPABASE_URL");
   if (!publicSupabaseOriginAllowed(
     url,
@@ -84,7 +87,7 @@ function config(): { base: string; chave: string } {
   )) {
     throw new ErroRest("origem dos dados públicos não confirmada", "origem");
   }
-  if (!chave) throw new Error("Variável de ambiente ausente: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
+  if (!chave) throw new ErroRest("credencial de leitura indisponível", "origem");
   return { base: url.replace(/\/+$/, ""), chave };
 }
 
@@ -92,21 +95,20 @@ export async function consultar<T>(
   recurso: Recurso,
   opcoes: OpcoesConsulta,
   schema: ZodType<T>,
-  transporte?: { cache: "no-store"; timeoutMs: number },
 ): Promise<T[]> {
   if (!(RECURSOS_PERMITIDOS as readonly string[]).includes(recurso)) {
     throw new Error(`recurso não permitido: ${recurso}`);
   }
-  const { base, chave } = config();
+  const { base, chave } = config(opcoes.gerados);
   const url = `${base}/rest/v1/${recurso}?${montarQuery(opcoes).toString()}`;
 
   let resposta: Response;
   try {
     resposta = await fetch(url, {
       method: "GET",
-      headers: { ...supabaseApiHeaders(chave), Accept: "application/json" },
-      cache: transporte?.cache,
-      signal: AbortSignal.timeout(transporte?.timeoutMs ?? TIMEOUT_MS),
+      ...(opcoes.gerados ? { cache: "no-store" as const, redirect: "error" as const } : {}),
+      headers: { ...supabaseApiHeaders(chave), Accept: "application/json", ...(opcoes.gerados ? { "x-modo-gerados": "1" } : {}) },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (e) {
     throw new ErroRest(`falha de rede ao consultar ${recurso}: ${(e as Error).name}`, recurso);

@@ -58,5 +58,5 @@ export const rotasContrato = [
   ["GET", "/api/admin/fila"], ["GET", "/api/admin/fotos/{id}/revisao"], ["POST", "/api/admin/imagem"],
   ["GET", "/api/admin/ocorrencias"], ["GET", "/api/admin/ocorrencias/{id}"], ["POST", "/api/admin/ocorrencias/{id}/atualizacoes"], ["GET", "/api/admin/ocorrencias/{id}/contato"], ["POST", "/api/admin/ocorrencias/{id}/mesclar"], ["POST", "/api/admin/ocorrencias/{id}/moderar"], ["POST", "/api/admin/ocorrencias/{id}/situacao"], ["POST", "/api/admin/ocorrencias/lote"],
   ["GET", "/api/admin/respostas"], ["POST", "/api/admin/respostas/{id}/revisar"],
-  ["GET", "/api/cron/limpar-quarentena"], ["GET", "/api/dados"], ["POST", "/api/denunciar"], ["POST", "/api/excluir"], ["POST", "/api/imagem"], ["POST", "/api/registrar"], ["POST", "/api/resposta"], ["GET", "/api/saude"], ["POST", "/api/afeta"],
+  ["GET", "/api/cron/limpar-quarentena"], ["GET", "/api/dados"], ["POST", "/api/demonstracao"], ["POST", "/api/denunciar"], ["POST", "/api/excluir"], ["POST", "/api/imagem"], ["POST", "/api/registrar"], ["POST", "/api/resposta"], ["GET", "/api/saude"], ["POST", "/api/afeta"],
 ] as const;

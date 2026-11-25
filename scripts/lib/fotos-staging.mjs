@@ -5,6 +5,7 @@ import { limparImagens } from '../../src/lib/registro/limpeza-imagens.mjs';
 const REF = 'hvekgzxuciyewtybwads';
 const COLUNAS = 'id,ocorrencia_id,ordem,descricao_publica';
 const checklist = { rosto:false, menor:false, placa:false, numero_residencia:false, documento:false, agressao:false };
+const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 function headers(key) { return { ...supabaseApiHeaders(key), 'Content-Type':'application/json' }; }
 function repetirFalhaDeConexao(transportar) {
@@ -41,66 +42,83 @@ export async function verificarStagingFotos(config, transportar=globalThis.fetch
 }
 
 export async function executarCicloFotos(config, transportar=globalThis.fetch) {
- transportar=repetirFalhaDeConexao(transportar);
- await verificarStagingFotos(config,transportar);
- config={...config,base:new URL(config.base).origin};
  if(!config.app||!config.adminToken||!config.hmac)throw Error('Ciclo bloqueado: configurar FOTOS_STAGING_APP_URL, FOTOS_STAGING_ADMIN_TOKEN (AAL2) e HMAC_SEGREDO do app.');
  let app;try{app=new URL(config.app);}catch{throw Error('URL do app inválida.');}
- if(app.username||app.password||app.search||app.hash||app.pathname!=='/'||(app.protocol!=='https:'&&!(app.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(app.hostname))))throw Error('URL do app inválida.');
+ if(app.username||app.password||app.search||app.hash||app.pathname!=='/'||!['http:','https:'].includes(app.protocol)||!['localhost','127.0.0.1','[::1]'].includes(app.hostname))throw Error('O app de teste deve usar loopback.');
+ const fetchSemRedirecionamento=(input,init)=>transportar(input,{...init,redirect:'error'});
+ const buscar=repetirFalhaDeConexao(fetchSemRedirecionamento);
+ await verificarStagingFotos(config,buscar);
+ config={...config,base:new URL(config.base).origin};
  const adminHeaders={...headers(config.anon),Authorization:`Bearer ${config.adminToken}`};
- const auth=await transportar(`${config.base}/auth/v1/user`,{headers:adminHeaders});
+ const auth=await buscar(`${config.base}/auth/v1/user`,{headers:adminHeaders});
  const user=auth.ok?await auth.json():null;let claims;
  try{claims=JSON.parse(Buffer.from(config.adminToken.split('.')[1],'base64url').toString());}catch{throw Error('Sessão administrativa inválida.');}
  if(!user?.id||claims.sub!==user.id||claims.aal!=='aal2')throw Error('Sessão administrativa exige MFA AAL2.');
  const api=async(path,body,key=config.service)=>{
-  const r=await transportar(`${config.base}/rest/v1/${path}`,{method:body===undefined?'GET':'POST',headers:key===config.adminToken?adminHeaders:headers(key),...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(15000)});
+  const r=await buscar(`${config.base}/rest/v1/${path}`,{method:body===undefined?'GET':'POST',headers:key===config.adminToken?adminHeaders:headers(key),...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(15000)});
   if(!r.ok)throw Error(`Falha no contrato do ciclo (${r.status}).`);return r.status===204?null:r.json();
  };
  const acesso=config.basic?{Authorization:`Basic ${config.basic}`}:{ };
  const appHeaders={...acesso,Origin:app.origin};
- const admin=async(body)=>{const r=await transportar(`${app.origin}/api/admin/imagem`,{method:'POST',headers:{...appHeaders,'Content-Type':'application/json','X-Observatorio-CSRF':'1',Cookie:`og_admin_access_token=${encodeURIComponent(config.adminToken)}`},body:JSON.stringify(body),signal:AbortSignal.timeout(60000)});if(!r.ok)throw Error(`Moderação HTTP falhou (${r.status}).`);};
- const token=randomBytes(32).toString('base64url'), tokenHash=hash(token), tokenBytea=`\\x${tokenHash}`;
+ const admin=async(body)=>{const r=await buscar(`${app.origin}/api/admin/imagem`,{method:'POST',headers:{...appHeaders,'Content-Type':'application/json','X-Observatorio-CSRF':'1',Cookie:`og_admin_access_token=${encodeURIComponent(config.adminToken)}`},body:JSON.stringify(body),signal:AbortSignal.timeout(60000)});if(!r.ok)throw Error(`Moderação HTTP falhou (${r.status}).`);};
+ const runId=randomUUID(), token=randomBytes(32).toString('base64url'), tokenHash=hash(token), tokenBytea=`\\x${tokenHash}`;
  const identidade=createHmac('sha256',config.hmac).update(`foto:${tokenHash}`).digest('hex');
  let ocorrencia, imagem, etapa='preparação';const publicos=new Set();const privados=new Set();let cleanupFalhou=false;
  async function listarPrivados(){
-  const r=await transportar(`${config.base}/storage/v1/object/list/imagens-quarentena`,{method:'POST',headers:headers(config.service),body:JSON.stringify({prefix:`${identidade}/1`,limit:100,offset:0})});
+  const r=await buscar(`${config.base}/storage/v1/object/list/imagens-quarentena`,{method:'POST',headers:headers(config.service),body:JSON.stringify({prefix:`${identidade}/1`,limit:100,offset:0})});
   if(!r.ok)throw Error('Falha ao conferir objetos de teste.');const rows=await r.json();if(!Array.isArray(rows))throw Error('Lista inválida.');
   for(const row of rows)if(row.id&&/^[a-f0-9]{64}\.jpg$/.test(row.name))privados.add(`${identidade}/1/${row.name}`);
+  return rows;
  }
- async function removerObjeto(bucket,caminho){const r=await transportar(`${config.base}/storage/v1/object/${bucket}`,{method:'DELETE',headers:headers(config.service),body:JSON.stringify({prefixes:[caminho]})});if(!r.ok)throw Error('Falha na limpeza do teste.');}
+ async function removerObjeto(bucket,caminho){const r=await buscar(`${config.base}/storage/v1/object/${bucket}`,{method:'DELETE',headers:headers(config.service),body:JSON.stringify({prefixes:[caminho]})});if(!r.ok)throw Error('Falha na limpeza do teste.');}
  try{
   etapa='referências públicas';
   const [mun]=await api('municipios?select=id&limit=1',undefined,config.anon),[cat]=await api('categorias?select=id&limit=1',undefined,config.anon);
   etapa='registro fictício da foto';
-  const [registro]=await api('rpc/registrar_ocorrencia',{p_municipio_id:mun.id,p_categoria_id:cat.id,p_titulo:'[TESTE FICTÍCIO M4] Foto de pavimento',p_descricao:'Relato inteiramente fictício criado pelo teste de integração M4.',p_anonimo:true,p_nome:null,p_whatsapp:null,p_consentimento:false,p_consentimento_versao:null,p_token_hash:tokenBytea,p_moderacao:'pendente',p_retencao_dias:null,p_chave_idempotencia:randomUUID(),p_origem_hash:null});
+  const [registro]=await api('rpc/registrar_ocorrencia',{p_municipio_id:mun.id,p_categoria_id:cat.id,p_titulo:`[DEMO-MVP:${runId}] Foto de pavimento`,p_descricao:'Relato inteiramente fictício criado pelo teste de integração M4.',p_anonimo:true,p_nome:null,p_whatsapp:null,p_consentimento:false,p_consentimento_versao:null,p_token_hash:tokenBytea,p_moderacao:'pendente',p_retencao_dias:null,p_chave_idempotencia:runId,p_origem_hash:null});
+  if(!uuid.test(registro?.out_id))throw Error('Identificador da fixture inválido.');
   ocorrencia=registro.out_id;
   etapa='aprovação inicial';
-  await api('rpc/admin_moderar_ocorrencia',{p_id:ocorrencia,p_acao:'aprovar',p_motivo:'Teste fictício M4'},config.adminToken);
-  const jpeg=await sharp({create:{width:20,height:20,channels:3,background:'red'}}).jpeg().toBuffer();
-  async function upload(bytes,contexto){const form=new FormData();form.set('token',token);form.set('ordem','1');form.set('contexto',contexto);form.set('foto',new File([bytes],'sintetica.jpg',{type:'image/jpeg'}));return transportar(`${app.origin}/api/imagem`,{method:'POST',headers:appHeaders,body:form,signal:AbortSignal.timeout(60000)});}
+  const detalhe=await api('rpc/admin_detalhar_ocorrencia',{p_id:ocorrencia},config.adminToken);
+  if(!Number.isInteger(detalhe?.ocorrencia?.versao_admin))throw Error('Versão inicial da fixture indisponível.');
+  await api('rpc/admin_moderar_ocorrencia',{p_id:ocorrencia,p_acao:'aprovar',p_versao_esperada:detalhe.ocorrencia.versao_admin,p_motivo:'Teste fictício M4'},config.adminToken);
+  const jpeg=await sharp({create:{width:20,height:20,channels:3,background:'red'}})
+   .withExif({ IFD0: { ImageDescription: 'EXIF exclusivamente sintético do teste M4' } }).jpeg().toBuffer();
+  if(!(await sharp(jpeg).metadata()).exif)throw Error('JPEG de origem não contém o EXIF sintético.');
+  async function upload(bytes,contexto){const form=new FormData();form.set('token',token);form.set('ordem','1');form.set('contexto',contexto);form.set('foto',new File([bytes],'sintetica.jpg',{type:'image/jpeg'}));return buscar(`${app.origin}/api/imagem`,{method:'POST',headers:appHeaders,body:form,signal:AbortSignal.timeout(60000)});}
   etapa='upload da foto';
   const uploadInicial=await upload(jpeg,'Pavimento sintético vermelho');
   if(uploadInicial.status!==201){const erro=await uploadInicial.clone().json().catch(()=>null);throw Error(`Upload de teste falhou (${uploadInicial.status}${typeof erro?.erro?.codigo==='string'?`, ${erro.erro.codigo}`:''}).`);}
   const rows=await api(`imagens?select=id,caminho_storage&ocorrencia_id=eq.${ocorrencia}`,undefined,config.adminToken);
-  if(rows.length!==1)throw Error('Upload não criou vínculo único.');imagem=rows[0].id;publicos.add(`${imagem}.jpg`);privados.add(rows[0].caminho_storage);
+  if(rows.length!==1||!uuid.test(rows[0].id)||!new RegExp(`^${identidade}/1/[a-f0-9]{64}\\.jpg$`).test(rows[0].caminho_storage))throw Error('Vínculo da fixture fora da allowlist.');
+  imagem=rows[0].id;publicos.add(`${imagem}.jpg`);privados.add(rows[0].caminho_storage);
+  etapa='quarentena e remoção de EXIF';
+  const armazenada=await buscar(`${config.base}/storage/v1/object/imagens-quarentena/${rows[0].caminho_storage}`,{headers:headers(config.service)});
+  if(!armazenada.ok||(await sharp(Buffer.from(await armazenada.arrayBuffer())).metadata()).exif)throw Error('Quarentena ausente ou EXIF não removido.');
   if((await upload(jpeg,'Contexto sintético alterado')).status!==201)throw Error('Retry não foi idempotente.');
   const outro=await sharp({create:{width:20,height:20,channels:3,background:'blue'}}).jpeg().toBuffer();if((await upload(outro,'Outra foto sintética')).status!==409)throw Error('Slot ocupado não foi recusado.');
   etapa='aprovação da foto';
   await admin({imagem_id:imagem,acao:'aprovar',descricao_publica:'Pavimento sintético vermelho, sem pessoas.',checklist});
   const visiveis=await api(`v_imagens_publicas?select=${COLUNAS}&id=eq.${imagem}`,undefined,config.anon);if(visiveis.length!==1||visiveis[0].descricao_publica!=='Pavimento sintético vermelho, sem pessoas.')throw Error('Foto aprovada não está pública com alt revisado.');
-  const pagina=await transportar(`${app.origin}/problema/${ocorrencia}`,{headers:acesso});if(!pagina.ok||!(await pagina.text()).includes('Pavimento sintético vermelho, sem pessoas.'))throw Error('Página pública não exibe alt revisado.');
-  const foto=await transportar(`${config.base}/storage/v1/object/public/imagens-publicas/${imagem}.jpg`);if(!foto.ok)throw Error('Cópia pública indisponível.');
+  const pagina=await buscar(`${app.origin}/problema/${ocorrencia}`,{headers:acesso});if(!pagina.ok||!(await pagina.text()).includes('Pavimento sintético vermelho, sem pessoas.'))throw Error('Página pública não exibe alt revisado.');
+  const foto=await buscar(`${config.base}/storage/v1/object/public/imagens-publicas/${imagem}.jpg`);if(!foto.ok)throw Error('Cópia pública indisponível.');
   etapa='remoção da foto';
   await admin({imagem_id:imagem,acao:'remover',motivo:'Retirada do teste fictício M4',checklist});
   if((await api(`v_imagens_publicas?select=id&id=eq.${imagem}`,undefined,config.anon)).length)throw Error('Foto removida permanece na view.');
+  const publicoRemovido=await buscar(`${config.base}/storage/v1/object/list/imagens-publicas`,{method:'POST',headers:headers(config.service),body:JSON.stringify({prefix:'',search:`${imagem}.jpg`,limit:10})});
+  const objetosPublicos=publicoRemovido.ok?await publicoRemovido.json():null;
+  if(!Array.isArray(objetosPublicos)||objetosPublicos.some(row=>row.id&&row.name===`${imagem}.jpg`))throw Error('Moderação não concluiu a purga da cópia pública no Storage.');
+  if((await listarPrivados()).some(row=>row.id&&privados.has(`${identidade}/1/${row.name}`)))throw Error('Moderação não concluiu a purga da cópia privada no Storage.');
+  const urlPublicaNova = await buscar(`${config.base}/storage/v1/object/public/imagens-publicas/${imagem}.jpg?verificacao=${runId}`,{cache:'no-store'});
+  if(![400,404].includes(urlPublicaNova.status))throw Error(`Objeto removido respondeu na leitura pública nova (${urlPublicaNova.status}).`);
   // Exercise the real cleanup routine with a unique test-only prefix; no unrelated object is eligible.
   etapa='limpeza de órfão';
   const orfao=`${identidade}/1/${'f'.repeat(64)}.jpg`;privados.add(orfao);
-  const criado=await transportar(`${config.base}/storage/v1/object/imagens-quarentena/${orfao}`,{method:'POST',headers:{...headers(config.service),'Content-Type':'image/jpeg','x-upsert':'false'},body:jpeg});if(!criado.ok)throw Error('Fixture órfã não criada.');
-  const restrito=async(input,init)=>{const r=await transportar(input,init);const url=new URL(input);if(!url.pathname.includes('/object/list/'))return r;const rows=await r.json();const prefix=JSON.parse(init.body).prefix;return Response.json(rows.filter(row=>url.pathname.endsWith('imagens-publicas')?publicos.has(row.name):prefix===''?row.name===identidade:true));};
+  const criado=await buscar(`${config.base}/storage/v1/object/imagens-quarentena/${orfao}`,{method:'POST',headers:{...headers(config.service),'Content-Type':'image/jpeg','x-upsert':'false'},body:jpeg});if(!criado.ok)throw Error('Fixture órfã não criada.');
+  const restrito=async(input,init)=>{const r=await buscar(input,init);const url=new URL(input);if(!url.pathname.includes('/object/list/'))return r;const rows=await r.json();const prefix=JSON.parse(init.body).prefix;return Response.json(rows.filter(row=>url.pathname.endsWith('imagens-publicas')?publicos.has(row.name):prefix===''?row.name===identidade:true));};
   await limparImagens({base:config.base,key:config.service,apply:true,now:Date.now()+25*3600000,fetch:restrito});
+  if((await listarPrivados()).some(row=>row.id&&`${identidade}/1/${row.name}`===orfao))throw Error('Objeto órfão permanece após a rotina de limpeza.');
   etapa='verificação final do Storage';
-  return { ciclo:true };
  }catch(error){
   const causa=error instanceof Error?error.message:'falha';
   throw new Error(`Etapa de fotos ${etapa}: ${causa}`);
@@ -108,12 +126,21 @@ export async function executarCicloFotos(config, transportar=globalThis.fetch) {
   try{await listarPrivados();}catch{cleanupFalhou=true;}
   for(const caminho of privados)try{await removerObjeto('imagens-quarentena',caminho);}catch{cleanupFalhou=true;}
   for(const caminho of publicos)try{await removerObjeto('imagens-publicas',caminho);}catch{cleanupFalhou=true;}
-  if(ocorrencia)try{await api('rpc/solicitar_exclusao_por_token',{p_token_hash:tokenBytea,p_apagar_conteudo:true});}catch{cleanupFalhou=true;}
+  if(ocorrencia)try{
+   await api('rpc/solicitar_exclusao_por_token',{p_token_hash:tokenBytea,p_apagar_conteudo:true});
+   const [vinculos, visiveis, acompanhavel]=await Promise.all([
+    api(`imagens?select=id&ocorrencia_id=eq.${ocorrencia}`),
+    api(`v_ocorrencias_publicas?select=id&id=eq.${ocorrencia}`,undefined,config.anon),
+    api('rpc/acompanhar_por_token',{p_token_hash:tokenBytea}),
+   ]);
+   if(![vinculos,visiveis,acompanhavel].every(dados=>Array.isArray(dados)&&dados.length===0))cleanupFalhou=true;
+  }catch{cleanupFalhou=true;}
   for(const [bucket,caminhos] of [['imagens-quarentena',privados],['imagens-publicas',publicos]])for(const caminho of caminhos){try{
    const partes=caminho.split('/'),nome=partes.pop();
-   const r=await transportar(`${config.base}/storage/v1/object/list/${bucket}`,{method:'POST',headers:headers(config.service),body:JSON.stringify({prefix:partes.join('/'),search:nome,limit:1000,offset:0})});
+   const r=await buscar(`${config.base}/storage/v1/object/list/${bucket}`,{method:'POST',headers:headers(config.service),body:JSON.stringify({prefix:partes.join('/'),search:nome,limit:1000,offset:0})});
    if(!r.ok)throw Error();const rows=await r.json();if(!Array.isArray(rows)||rows.some(row=>row.name===nome&&row.id))cleanupFalhou=true;
   }catch{cleanupFalhou=true;}}
   if(cleanupFalhou)throw Error('Limpeza do teste não foi comprovada; investigar antes de repetir.');
  }
+ return { ciclo:true, exif_removido:true, limpeza_verificada:true, relato_sintetico:ocorrencia, imagem_sintetica:imagem };
 }

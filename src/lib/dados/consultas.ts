@@ -8,7 +8,7 @@ import {
   municipioCoberturaSchema, COLUNAS_MUNICIPIO_COBERTURA, municipioSchema, problemaDetalheSchema, problemaListaSchema, respostaSchema,
   COLUNAS_ATUALIZACAO, COLUNAS_CATEGORIA, COLUNAS_IMAGEM, COLUNAS_INDICADORES_GERAIS,
   COLUNAS_INDICADOR_MUNICIPIO_CATEGORIA, COLUNAS_MUNICIPIO, COLUNAS_PROBLEMA_DETALHE, COLUNAS_PROBLEMA_LISTA,
-  COLUNAS_RESPOSTA, COLUNAS_SEMANA, semanaSchema,
+  COLUNAS_RESPOSTA, COLUNAS_SEMANA, comGerado, semanaSchema,
   type Atualizacao, type Categoria, type Imagem, type IndicadoresGerais, type Municipio, type ProblemaDetalhe,
   type ProblemaLista, type Resposta,
 } from "./schemas";
@@ -22,12 +22,12 @@ import { agregarSemana, JANELA_DIAS, type ResumoSemana } from "./semana";
 
 // ---------------------------------------------------------------- montagem pura (testável sem rede)
 
-export async function obterExportacaoDados(entrada: z.infer<typeof filtrosExportacaoSchema> = {}) {
+export async function obterExportacaoDados(entrada: z.infer<typeof filtrosExportacaoSchema> = {}, gerados = false) {
   "use cache";
   cacheLife("minutes");
   cacheTag("indicadores", "problemas");
   const { dadoPainelSchema } = await import("./schemas");
-  return carregarExportacao(entrada, (opcoes) => consultar("v_dados_painel", opcoes, dadoPainelSchema));
+  return carregarExportacao(entrada, (opcoes) => consultar("v_dados_painel", { ...opcoes, gerados }, dadoPainelSchema));
 }
 
 /** Filtro de cursor. Revalida estritamente antes de interpolar. */
@@ -86,6 +86,7 @@ export function urlImagem(
 
 export async function listarProblemas(
   entrada: { municipio?: string; categoria?: string; cursor?: string } = {},
+  gerados = false,
 ): Promise<{ itens: ProblemaLista[]; proximoCursor: string | null }> {
   "use cache";
   cacheLife("minutes");
@@ -94,7 +95,11 @@ export async function listarProblemas(
   const f = lerFiltros(entrada);
   if (f.municipio) cacheTag(`municipio:${f.municipio}`);
 
-  const linhas = await consultar("v_ocorrencias_publicas", montarConsultaLista(f), problemaListaSchema);
+  const linhas = await consultar(
+    "v_ocorrencias_publicas",
+    { ...montarConsultaLista(f), select: comGerado(COLUNAS_PROBLEMA_LISTA, gerados), gerados },
+    problemaListaSchema,
+  );
   const itens = linhas.slice(0, TAMANHO_PAGINA);
   const ultimo = itens[itens.length - 1];
   const proximoCursor =
@@ -102,7 +107,7 @@ export async function listarProblemas(
   return { itens, proximoCursor };
 }
 
-export async function obterProblema(id: string): Promise<{
+export async function obterProblema(id: string, gerados = false): Promise<{
   problema: ProblemaDetalhe;
   imagens: Imagem[];
   atualizacoes: Atualizacao[];
@@ -117,25 +122,28 @@ export async function obterProblema(id: string): Promise<{
   const [problemas, imagens, atualizacoes, respostas] = await Promise.all([
     consultar(
       "v_ocorrencias_publicas",
-      { select: COLUNAS_PROBLEMA_DETALHE, filtros: [["id", `eq.${v.data}`]], limite: 1 },
+      { select: comGerado(COLUNAS_PROBLEMA_DETALHE, gerados), filtros: [["id", `eq.${v.data}`]], limite: 1, gerados },
       problemaDetalheSchema,
     ),
     consultar(
       "v_imagens_publicas",
-      montarConsultaPorOcorrencia(COLUNAS_IMAGEM, v.data, [{ coluna: "ordem", direcao: "asc" }]),
+      { ...montarConsultaPorOcorrencia(COLUNAS_IMAGEM, v.data, [{ coluna: "ordem", direcao: "asc" }]), gerados },
       imagemSchema,
     ),
     consultar(
       "v_atualizacoes_publicas",
-      montarConsultaPorOcorrencia(COLUNAS_ATUALIZACAO, v.data, [
-        { coluna: "criado_em", direcao: "asc" },
-        { coluna: "id", direcao: "asc" },
-      ]),
+      {
+        ...montarConsultaPorOcorrencia(COLUNAS_ATUALIZACAO, v.data, [
+          { coluna: "criado_em", direcao: "asc" },
+          { coluna: "id", direcao: "asc" },
+        ]),
+        gerados,
+      },
       atualizacaoSchema,
     ),
     consultar(
       "v_respostas_publicas",
-      montarConsultaPorOcorrencia(COLUNAS_RESPOSTA, v.data, [{ coluna: "publicada_em", direcao: "asc" }]),
+      { ...montarConsultaPorOcorrencia(COLUNAS_RESPOSTA, v.data, [{ coluna: "publicada_em", direcao: "asc" }]), gerados },
       respostaSchema,
     ),
   ]);
@@ -144,7 +152,7 @@ export async function obterProblema(id: string): Promise<{
   return { problema, imagens, atualizacoes, respostas };
 }
 
-export async function obterMunicipio(slug: string): Promise<{ slug: string; nome: string; total: number; ativo_acompanhamento: boolean } | null> {
+export async function obterMunicipio(slug: string, gerados = false): Promise<{ slug: string; nome: string; total: number; ativo_acompanhamento: boolean } | null> {
   "use cache";
   cacheLife("minutes");
   const v = slugSchema.safeParse(slug);
@@ -159,7 +167,7 @@ export async function obterMunicipio(slug: string): Promise<{ slug: string; nome
     ),
     consultar(
       "v_indicadores_municipio_categoria",
-      { select: COLUNAS_INDICADOR_MUNICIPIO_CATEGORIA, filtros: [["municipio_slug", `eq.${v.data}`]], limite: 100 },
+      { select: COLUNAS_INDICADOR_MUNICIPIO_CATEGORIA, filtros: [["municipio_slug", `eq.${v.data}`]], limite: 100, gerados },
       indicadorMunicipioCategoriaSchema,
     ),
   ]);
@@ -205,7 +213,7 @@ export async function listarCategorias(): Promise<Categoria[]> {
   );
 }
 
-export async function ultimosProblemas(n: number = 5): Promise<ProblemaLista[]> {
+export async function ultimosProblemas(n: number = 5, gerados = false): Promise<ProblemaLista[]> {
   "use cache";
   cacheLife("minutes");
   cacheTag("problemas");
@@ -213,9 +221,10 @@ export async function ultimosProblemas(n: number = 5): Promise<ProblemaLista[]> 
   return consultar(
     "v_ocorrencias_publicas",
     {
-      select: COLUNAS_PROBLEMA_LISTA,
+      select: comGerado(COLUNAS_PROBLEMA_LISTA, gerados),
       ordem: [{ coluna: "publicado_em", direcao: "desc" }, { coluna: "id", direcao: "desc" }],
       limite,
+      gerados,
     },
     problemaListaSchema,
   );
@@ -225,7 +234,7 @@ const LOTE_SEMANA = 300;
 /** Teto de segurança: 40 × 300 = 12.000 relatos por janela de 7 dias. */
 const MAX_PAGINAS_SEMANA = 40;
 
-export async function resumoSemana(): Promise<ResumoSemana> {
+export async function resumoSemana(gerados = false): Promise<ResumoSemana> {
   "use cache";
   cacheLife("minutes");
   cacheTag("problemas");
@@ -237,7 +246,7 @@ export async function resumoSemana(): Promise<ResumoSemana> {
     if (ultimo) filtros.push(["id", `gt.${idSchema.parse(ultimo)}`]);
     const lote = await consultar(
       "v_ocorrencias_publicas",
-      { select: COLUNAS_SEMANA, filtros, ordem: [{ coluna: "id", direcao: "asc" }], limite: LOTE_SEMANA },
+      { select: COLUNAS_SEMANA, filtros, ordem: [{ coluna: "id", direcao: "asc" }], limite: LOTE_SEMANA, gerados },
       semanaSchema,
     );
     linhas.push(...lote);
@@ -247,20 +256,20 @@ export async function resumoSemana(): Promise<ResumoSemana> {
   return agregarSemana(linhas);
 }
 
-export async function indicadoresGerais(): Promise<IndicadoresGerais | null> {
+export async function indicadoresGerais(gerados = false): Promise<IndicadoresGerais | null> {
   "use cache";
   cacheLife("minutes");
   cacheTag("indicadores");
   const [linha] = await consultar(
     "v_indicadores_gerais",
-    { select: COLUNAS_INDICADORES_GERAIS, limite: 1 },
+    { select: COLUNAS_INDICADORES_GERAIS, limite: 1, gerados },
     indicadoresGeraisSchema,
   );
   return linha ?? null;
 }
 
 /** Página completa por cursor de id, sem truncar em 300 relatos. */
-export async function obterDadosPainel(entrada: {municipio?:string;categoria?:string} = {}) {
+export async function obterDadosPainel(entrada: {municipio?:string;categoria?:string} = {}, gerados = false) {
   'use cache';
   cacheLife('minutes');
   cacheTag('indicadores','problemas');
@@ -273,7 +282,7 @@ export async function obterDadosPainel(entrada: {municipio?:string;categoria?:st
     if(f.municipio) filtros.push(['municipio_slug',`eq.${f.municipio}`]);
     if(f.categoria) filtros.push(['categoria_slug',`eq.${f.categoria}`]);
     if(ultimo) filtros.push(['id',`gt.${idSchema.parse(ultimo)}`]);
-    const lote=await consultar('v_dados_painel',{select:COLUNAS_DADO_PAINEL,filtros,ordem:[{coluna:'id',direcao:'asc'}],limite:300},dadoPainelSchema);
+    const lote=await consultar('v_dados_painel',{select:COLUNAS_DADO_PAINEL,filtros,ordem:[{coluna:'id',direcao:'asc'}],limite:300,gerados},dadoPainelSchema);
     itens.push(...lote);
     if(lote.length<300) return itens;
     ultimo=lote[lote.length-1].id;

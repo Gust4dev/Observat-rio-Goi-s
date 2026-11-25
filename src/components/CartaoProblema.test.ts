@@ -14,7 +14,7 @@ describe("CartaoProblema", () => {
     const html = render({ variante: "home", temRespostaOficial: true, confirmacoesTotal: 5 });
     expect(html).toContain("Saúde");
     expect(html).toContain("<svg");
-    expect(html).toContain("Dados de demonstração");
+    expect(html).toContain("Dados gerados (fictícios)");
     expect(html).toContain("Publicado em");
     expect(html).toContain("Tem resposta oficial");
     expect(html).toContain("Ver relato");
@@ -30,7 +30,7 @@ describe("CartaoProblema", () => {
   it("variante home: sem resposta oficial nem demonstração quando ausentes", () => {
     const html = render({ variante: "home", demonstracao: false, categoriaSlug: undefined });
     expect(html).not.toContain("Tem resposta oficial");
-    expect(html).not.toContain("Dados de demonstração");
+    expect(html).not.toContain("Dados gerados (fictícios)");
     expect(html).toContain("Saúde");
   });
   it("preserva a variante lista", () => {

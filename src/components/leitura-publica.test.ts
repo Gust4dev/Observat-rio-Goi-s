@@ -61,9 +61,9 @@ describe("conteúdo opcional e limites", () => {
     const { CartaoIndicador } = await import("./CartaoIndicador");
     const html = render(createElement(CartaoIndicador, { nome: "Relatos publicados", valor: 0, nota: "Total publicado", demonstracao: true }));
     expect(html).toContain(">0<");
-    expect(html).toContain("Dados de demonstração");
+    expect(html).toContain("Dados gerados (fictícios)");
     expect(html).toContain("Como ler estes números");
-    expect(html).toMatch(/<section[\s\S]*Dados de demonstração[\s\S]*Como ler estes números[\s\S]*<\/section>/);
+    expect(html).toMatch(/<section[\s\S]*Dados gerados \(fictícios\)[\s\S]*Como ler estes números[\s\S]*<\/section>/);
   });
   it("limita fotos, preserva descrição contextual e bloqueia origens não autorizadas", async () => {
     const { GaleriaFotos } = await import("./GaleriaFotos");
@@ -90,7 +90,7 @@ describe("metadados honestos e entradas hostis", () => {
     expect(html).toMatch(/datetime="2026-10-27T12:00:00Z"/i);
     expect(html).toContain("Também me afeta: 0");
     expect(html).toContain("não mede a gravidade");
-    expect(html).toContain("Dados de demonstração");
+    expect(html).toContain("Dados gerados (fictícios)");
     expect(html).not.toContain("undefined");
   });
   it.each(["http://exemplo.org", "https://usuario:senha@exemplo.org", "//exemplo.org", "<b>Evidência</b>"])("mantém evidência %s como texto", (evidencia) => {

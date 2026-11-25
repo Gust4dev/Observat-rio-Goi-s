@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { ShellPublico } from "@/components/ShellPublico";
 import { Rodape } from "@/components/Rodape";
 import "./globals.css";
-import { AvisoAmbiente } from "@/components/AvisoAmbiente";
+import { BarraModoAdmin } from "@/components/BarraModoAdmin";
+import { Suspense } from "react";
 
 export const metadata: Metadata = {
   metadataBase: process.env.NEXT_PUBLIC_SITE_URL
@@ -27,7 +28,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         >
           Pular para o conteúdo
         </a>
-        <AvisoAmbiente />
+        <Suspense fallback={null}><BarraModoAdmin /></Suspense>
         <ShellPublico rodape={<Rodape />}>{children}</ShellPublico>
       </body>
     </html>

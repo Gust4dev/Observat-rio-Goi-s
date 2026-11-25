@@ -40,3 +40,179 @@ O perfil concentra leituras e inclui até três cadastros com acompanhamento opc
 - Comparar o p95 de cada leitura pública com 2 s, o p95 dos envios, participação e ações administrativas com 3 s e o p99 com 5 s. Mostrar os valores medidos e as divergências por rota. Declarar quais fluxos ficaram fora da carga. Até três amostras de cadastro e acompanhamento só dão evidência pontual.
 - Informar vazão, taxa de erro inesperado frente à meta de menos de 1%, timeouts, desafios, 429 e validações esperadas. Se a proteção impedir o cliente HTTP, apresentar o resultado de capacidade do alias como inconclusivo para este ensaio.
 - Cruzar a jornada com a telemetria Vercel/Supabase e documentar a limpeza das fixtures. Registrar no Plano 17 o aceite funcional e de carga separadamente.
+
+## Rajada somente leitura no deployment de 24/11/2026
+
+**Resultado: 50 abas por 91,7 s em oito ondas, com capacidade sustentada ainda inconclusiva.** A CLI confirmou que o alias `observatorio-go.vercel.app` apontava para `dpl_6xdKpXhEkN21enesmWTV1fZRc4NS`, projeto `observatorio-go`, Production READY. O ref Supabase Production previamente confirmado é `acxcqtknxjiwopdtjxoc`. A campanha acessou somente o alias e não leu configuração secreta nem acessou o banco diretamente.
+
+O navegador Brave abriu primeiro 20 abas. A tentativa de rampa retornou o inventário com 40 rotas e 10 abas em branco após um timeout da automação. Retomei as 50 abas já criadas e medi oito ondas completas das 10:43:50 às 10:45:22 BRT, totalizando 400 navegações com URL final esperada e zero títulos de Challenge ou erro do instrumento nessa amostra. As ondas foram espaçadas em 12–18 s, com cerca de 4,36 navegações por segundo na janela total. O tempo por navegação inclui o controle do browser, de `goto` ou recarga até a resolução da operação. O instrumento não expôs Navigation Timing nem status HTTP para cada aba. Todas as abas temporárias foram fechadas.
+
+| Rota | Amostras | p50 (ms) | p95 (ms) | p99 (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| `/` | 67 | 978 | 1.677 | 2.065 |
+| `/problemas` | 68 | 842 | 1.581 | 1.864 |
+| `/municipios` | 67 | 923 | 1.663 | 1.864 |
+| `/municipios/goiania` | 66 | 1.219 | 1.663 | 1.863 |
+| `/dados` | 66 | 854 | 1.567 | 2.065 |
+| `/api/dados?municipio=goiania&categoria=infraestrutura` | 66 | 1.069 | 1.336 | 1.644 |
+
+Os logs do mesmo deployment e janela retornaram 1.000 linhas no limite do comando, incluindo assets. Foram 127 HTTP 200 e 873 HTTP 304, todos com `wafAction=allow`. A consulta separada com filtro `httpStatus >= 400` retornou zero registros. A telemetria confirma ausência de 429/5xx na janela consultada e não atribui cada registro a uma sessão. Nenhuma fixture foi criada e nenhum dado foi escrito.
+
+A automação interrompeu a execução em segundo plano entre chamadas, o que limitou a janela a oito ondas. O resultado cobre acessos públicos em um perfil e uma rede. Ficam pendentes 30 minutos sustentados, sessões independentes e o cenário misto com cadastro, acompanhamento, participação e moderação. As proteções permaneceram ativas.
+
+## Navegação sustentada somente leitura em 24/11/2026
+
+Em uma campanha separada no mesmo deployment, 50 abas ficaram abertas por 30 min 27 s. Foram 60 ondas de 10 recargas, totalizando 600 navegações no host esperado, sem falhas observadas nem Challenge. As rotas foram home, lista de relatos, municípios, Goiânia, dados e API de dados filtrada. A unidade concorrente a cada onda foi de 10 recargas em um navegador compartilhado. A campanha mede leitura pública com pausas e 50 abas abertas. Sessões de usuários independentes e o perfil misto com cadastro, acompanhamento, participação e moderação continuam fora dessa medição.
+
+Uma onda teve tempo agregado de 6,64 s na automação. As últimas 100 medições individuais ficaram abaixo de 1,9 s. Os dois números medem unidades diferentes, e as 100 últimas amostras não sustentam um p95 para toda a campanha.
+
+A Vercel retornou **9.995 registros de requisição** no deployment `dpl_6xdKpXhEkN21enesmWTV1fZRc4NS` entre `2026-11-24T13:55:08Z` e `2026-11-24T14:25:36Z`. A CLI retornou 16 janelas consecutivas de até dois minutos, todas com `hasMore=false` e zero intervalos excluídos. Houve 1.306 respostas HTTP 200 e 8.689 HTTP 304, todas com `wafAction=allow`. A consulta separada de toda a janela com `httpStatus >= 400` retornou um resumo válido com `recordsReturned=0`, `hasMore=false` e zero intervalos excluídos. Assim, a telemetria registrou zero HTTP 429 e zero HTTP 5xx. A contagem inclui assets e demais requisições do deployment na janela e não equivale às 600 navegações observadas no navegador.
+
+## Perfil misto local com Supabase de staging em 24/11/2026
+
+`scripts/load-mvp-staging.mjs --execute` executa um build Next em loopback e só aceita o ref `hvekgzxuciyewtybwads`. O runtime usa os mecanismos de autenticação, validação e limite do aplicativo e as [credenciais oficiais de teste do Turnstile](https://developers.cloudflare.com/turnstile/troubleshooting/testing/) para envios sintéticos. O perfil inicial manteve 50 loops com pausas de 12–15,5 s. Foram 38 loops de leitura pública, 6 de acompanhamento com tokens distintos, 3 de leitura administrativa com contas AAL2 distintas e 3 de leitura pública após a etapa de participação. Houve 6 cadastros e 3 confirmações em relatos sintéticos distintos antes dos loops de carga. A taxa dessas escritas é amostral.
+
+Para a janela observada de 313,6 s, a vazão foi de aproximadamente 3,52 operações/s nos loops. As **1.103 chamadas** dos loops e as **9 operações preparatórias** listadas completaram sem erro HTTP inesperado ou timeout.
+
+| Operação | Chamadas | p50 (ms) | p95 (ms) | p99 (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Seis rotas públicas, em loopback | 912 | 3–12 | 6–18 | 8–220 |
+| Acompanhar por token | 128 | 357 | 1.897 | 2.584 |
+| Fila administrativa AAL2 | 32 | 895 | 2.764 | 3.003 |
+| Detalhe administrativo AAL2 | 31 | 740 | **4.191** | 4.352 |
+| Cadastro sintético na preparação | 6 | 1.264 | 1.887 | 1.887 |
+| Confirmação “Também me afeta” na preparação | 3 | 525 | 596 | 596 |
+
+As seis ocorrências foram retiradas pelo titular e verificadas pelo ID exato com estado removido e zero tokens ativos. Ficou um evento de retirada por ocorrência, como previsto pela auditoria. As três contas AAL2 fictícias foram removidas e conferidas. Nenhum fluxo de foto ou objeto Storage foi usado. O p95 do detalhe administrativo excedeu o limite de 3 s apesar de todos os status estarem corretos. A rodada usa um runtime local com um único cliente de origem, não mede CDN/SSR hospedado na Vercel e não fecha o cenário misto sustentado de 30 minutos do MVP.
+
+### Sonda administrativa isolada
+
+No acumulado de `pg_stat_statements` antes da sonda, o SQL da RPC de detalhe teve média de 3,92 ms e máximo de 24,99 ms em 62 execuções. A fila teve média de 8,26 ms e máximo de 82,73 ms em 272 execuções. São tempos do banco, sem rede, e incluem a atividade anterior do staging.
+
+A sonda de 120,1 s com duas sessões AAL2 autorizadas completou 46 leituras de fila e 44 de detalhe, todas HTTP 200. A fila ficou em p50 1.044 ms, p95 1.605 ms e p99 1.864 ms. O detalhe ficou em p50 1.020 ms, p95 1.575 ms e p99 1.703 ms. A sonda não reproduziu o p95 de 4.191 ms sob a carga mista inicial.
+
+| Etapa remota | p95 fila (ms) | p95 detalhe (ms) |
+| --- | ---: | ---: |
+| Validação do usuário Auth | 440 | 446 |
+| Consulta do papel ativo | 443 | 205 |
+| Rate limit | 587 | 564 |
+| RPC de dados | 637 | 633 |
+
+As quatro chamadas remotas são sequenciais por requisição e a instrumentação local mediu tempo até os headers de cada chamada. No detalhe, as medianas por etapa foram 174, 173, 332 e 336 ms, cuja soma de 1.015 ms se aproxima da mediana de 1.020 ms vista no cliente de loopback. Essa comparação agregada não mede o residual de uma requisição individual e não localiza o outlier da primeira campanha. Os dados direcionados apontam o custo dominante no caminho remoto até o Supabase, distribuído entre as etapas. Mantive as checagens do handler.
+
+A autenticação fictícia falhou em tentativas preliminares com HTTP 422 ao verificar o fator no Auth e HTTP 401 no fluxo local. O runner agora usa a referência de tempo do Auth e aguarda um próximo código para a segunda verificação do mesmo fator. A sonda retirou a fixture pelo ID, confirmou zero tokens e confirmações ativas e preservou o evento de auditoria. As duas contas fictícias foram removidas.
+
+Para medir uma janela curta com o cenário misto atual, use `MVP_STAGING_MINUTES=2` e, para a execução sustentada, `MVP_STAGING_MINUTES=30`. O script exige `--execute` em ambos os casos. Execute as janelas em sequência para evitar sobrepor contas, escritas e limites do mesmo cliente de origem. O modo `--admin-only` usa duas sessões AAL2 e uma única ocorrência. O cenário misto destina três ocorrências distintas às sessões de participação, repete as ações com pausas para exercitar a deduplicação e fecha as manifestações no console antes de retirar os filhos sintéticos por ID. Revise o resumo final de erros e limpeza antes de aceitar o resultado.
+
+### Ensaio sustentado com participação apenas na preparação
+
+A versão anterior do runner sustentou 50 loops por 1.800,7 s em loopback com staging. Nas 6.571 chamadas medidas ao app, a vazão foi de 3,65 req/s e não houve falhas nem timeouts. A amostra exclui as chamadas de autenticação inicial, a instrumentação das chamadas ao Supabase e a retirada final.
+
+| Operação | Amostras | p95 (ms) | p99 (ms) |
+| --- | ---: | ---: | ---: |
+| Seis rotas públicas, em loopback | 5.411 | 12–1.003 | 19–1.812 |
+| Cadastro | 6 | 2.155 | 2.155 |
+| Acompanhamento | 765 | 1.581 | 2.536 |
+| Fila AAL2 | 190 | 2.276 | 2.930 |
+| Detalhe AAL2 | 190 | 2.762 | 4.460 |
+| Renovação AAL2 | 6 | 1.083 | 1.083 |
+| Confirmação “Também me afeta” na preparação | 3 | 3.606 | 3.606 |
+
+No detalhe, o p95 até os headers para Auth, papel, limite e RPC foi de 698, 496, 755 e 604 ms, respectivamente, em 193 amostras por etapa. Essas contagens incluem três consultas de preparação. As seis ocorrências foram retiradas com zero tokens e confirmações ativos e seis eventos de auditoria. O runner confirmou a remoção das três contas AAL2. A fila e o detalhe atenderam ao teto de 3 s nesta janela sem mudança no handler.
+
+O ensaio permaneceu **parcial**: três loops fizeram leitura pública após a etapa de preparação. Só houve três confirmações pontuais, sem participação contínua, denúncias ou respostas na carga. Essa amostra de três inclui uma confirmação acima de 3 s. O perfil misto completo e a Vercel Production continuam fora do aceite desta rodada.
+
+### Janela curta com participação recorrente
+
+A execução de 120,6 s distribuiu 50 loops entre leituras públicas, três titulares com tokens distintos, três participantes com ocorrências publicadas distintas e três moderadores AAL2. Os outros três loops assumiram leitura pública nesta janela, que limitou a preparação a três cadastros para respeitar o orçamento por origem. O trio de participação alternou confirmação, denúncia, direito de resposta, detalhe e lista. As denúncias e respostas permaneceram na fila até o encerramento, e a repetição exerceu a deduplicação.
+
+| Operação | Amostras | p95 (ms) |
+| --- | ---: | ---: |
+| Seis rotas públicas | 389 | 17–46 |
+| Cadastro | 3 | 1.271 |
+| Acompanhamento | 26 | 1.345 |
+| “Também me afeta” | 6 | 998 |
+| Denúncia | 6 | 1.733 |
+| Direito de resposta | 4 | 1.215 |
+| Detalhe público da fixture | 3 | 243 |
+| Fila AAL2 | 14 | 2.783 |
+| Detalhe AAL2 | 11 | 1.530 |
+
+Foram 462 requisições medidas ao app e zero erros inesperados. Na amostra correlacionada do runtime local, o p95 do tempo restante após descontar as quatro esperas remotas até os headers ficou em 9 ms na fila e 42 ms no detalhe. Os dados reforçam a predominância do caminho remoto nessa janela e não justificam alterar controles de Auth, papel ou limite.
+
+O runner confirmou que as respostas pendentes não estavam na view pública. Encerrou as manifestações pela interface administrativa, retirou seis linhas filhas pela identidade exata e retirou os três relatos por token. A verificação encontrou zero relatos publicados, zero tokens e zero confirmações ativos para os IDs do ensaio, além de três eventos de retirada preservados. As três contas AAL2 foram removidas. Nenhuma revisão ou limpeza ficou inconclusiva.
+
+### Cobertura restante para comparar com o Plano 17
+
+- A janela sustentada no staging usa seis titulares e três moderadores. Ela intercala o detalhe de uma fixture nas rotas públicas e executa uma decisão versionada por moderador em três ocorrências sintéticas distintas depois do aquecimento. Esse perfil amostra escrita administrativa sem criar uma disputa entre moderadores pelo mesmo relato.
+- A janela local usa publicações aprovadas pelo console, pois a regra de publicação imediata textual é de Production. A validação de visibilidade e de retirada em até 5 s no alias continua uma prova separada.
+- A carga Vercel disponível para comparação é somente leitura. O cliente HTTP recebeu Challenge no preflight. A janela no Brave teve 50 abas abertas, com dez em recarga a cada onda. Portanto, combinar métricas locais e do navegador não equivale a medir o perfil misto de 50 sessões na Vercel.
+- Antes da rodada sustentada nova, `pg_stat_database` mostrou dez backends abertos, limite de 60 conexões e zero deadlocks acumulados no staging. São valores pontuais. CPU, pico de conexões e consumo de funções da Vercel requerem telemetria do ambiente em que a carga for executada.
+
+### Ensaio sustentado com o perfil misto completo no staging
+
+De **15:33:06,940 a 16:03:08,062 BRT** em 24/11/2026, o runtime Next em loopback, conectado exclusivamente ao ref `hvekgzxuciyewtybwads`, sustentou 50 sessões virtuais por 1.801,1 s. Foram 38 leitores, seis titulares com tokens distintos, três participantes com uma ocorrência exata cada e três moderadores com sessões AAL2 independentes. Foram medidas **6.569 chamadas ao aplicativo (3,65 req/s), todas com os status e contratos esperados**, sem timeout, HTTP 429 ou HTTP 5xx. O ensaio usa uma origem de rede e requisições HTTP de Node, sem browser/CDN/Vercel.
+
+| Operação | Amostras | p50 (ms) | p95 (ms) | p99 (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Início | 723 | 13 | 24 | 345 |
+| Lista de relatos | 792 | 10 | 200 | 484 |
+| Municípios | 726 | 11 | 15 | 22 |
+| Município Goiânia | 722 | 7 | 11 | 13 |
+| Dados | 720 | 10 | 200 | 319 |
+| API de dados filtrada | 722 | 3 | 9 | 247 |
+| Detalhe de relato público | 787 | 8 | 12 | 203 |
+| Cadastro | 6 | 1.151 | 2.660 | 2.660 |
+| Acompanhamento | 767 | 423 | 1.510 | 2.921 |
+| “Também me afeta” | 72 | 725 | 2.143 | **5.054** |
+| Denúncia | 72 | 820 | 2.630 | 4.333 |
+| Direito de resposta | 72 | 805 | 1.559 | 2.735 |
+| Fila AAL2 | 191 | 844 | 2.701 | 4.831 |
+| Detalhe AAL2 | 188 | 826 | 2.337 | 4.350 |
+| Moderação versionada | 3 | 1.069 | 1.397 | 1.397 |
+| Renovação de sessão AAL2 | 6 | 589 | 875 | 875 |
+
+**Resultado: aceites de duração, perfil, p95, erro e limpeza cumpridos no staging. O teto p99 de 5 s falhou em “Também me afeta” por 54 ms.** Com 72 amostras e cálculo por ordem, o p99 desta rota coincide com a maior latência observada. O runner reportou o desvio e encerrou com código 1 após o cleanup. O ensaio não registrou o tempo de cada etapa da requisição de confirmação mais lenta, então a causa dessa cauda específica continua indeterminada. Cadastro, moderação versionada e renovação têm poucas amostras e só dão evidência pontual de latência.
+
+O p95 do tempo residual correlacionado no runtime, após descontar as quatro esperas remotas até os headers, foi de 7 ms na fila e 6 ms no detalhe. Os p95 das quatro etapas remotas foram, na ordem Auth/papel/limite/RPC, 516/447/773/1.008 ms na fila e 553/564/727/606 ms no detalhe. Não se somam percentis por etapa para estimar o percentil total. Os snapshots agregados do banco registraram 10, 11 e 11 conexões abertas antes, durante e depois, com limite de 60 e zero deadlocks acumulados. Esses snapshots não medem pico de conexões, utilização de CPU ou erros atribuíveis somente à campanha.
+
+O runner fez a retirada definitiva das seis ocorrências por token, conferiu pelo ID ausência na projeção pública, zero tokens e confirmações ativas e preservou seis eventos de retirada. As respostas pendentes ficaram fora da view pública. As seis linhas filhas exatas foram encerradas em sessão AAL2 e retiradas pelo ID, após a retirada do relato. As três contas fictícias foram removidas e conferidas. Nenhuma limpeza ou revisão ficou inconclusiva. O ensaio não exercitou disputa de moderação sobre o mesmo registro nem a publicação textual imediata em Production, e nenhuma medição de staging substitui o aceite de carga mista no alias.
+
+Uma conferência independente em SQL read-only no staging, pela interseção da janela de criação e dos eventos de retirada, encontrou seis ocorrências removidas, seis eventos de retirada, seis eventos de revisão e zero tokens, confirmações, denúncias ou respostas remanescentes. Foi preciso considerar a diferença de cerca de 33 s entre o relógio local e o servidor. A função de visibilidade da view pública não é executável pelo papel dessa consulta CLI. A comprovação da projeção pública permaneceu a leitura por ID do runner.
+
+O classificador agora usa uma lista explícita de leituras para aplicar o teto p95 de 2 s. As demais operações têm teto p95 de 3 s, e todas têm p99 de 5 s. A versão executada já registrou 3 s como teto p95 de `afeta`, cujo rótulo era `afeta` e não o caminho da API. A mudança evita que uma alteração futura de rótulo para `/api/afeta` aplique por engano o teto das leituras. Ela não muda o veredito da rodada. A instrumentação preservada só decompõe fila e detalhe, portanto não há medição por etapa para a confirmação de 5.054 ms. Nenhuma otimização foi aplicada sem evidência dessa causa.
+
+### Redução de uma chamada no POST de confirmação
+
+Uma alteração local retirou a consulta ao agregado da view pública que o POST `/api/afeta` aguardava depois da RPC. A confirmação nova e a repetida recebem o mesmo HTTP 202 e o corpo genérico. O cliente mostra o aceite, pede a atualização do detalhe e apresenta o total canônico devolvido pelo servidor. Isso evita duplicar a contagem num retry sem retornar ao navegador se a ação foi deduplicada.
+
+Os testes direcionados comprovaram o 202 uniforme, a invalidação só após inserção, a ausência da consulta adicional e a atualização do componente quando a nova leitura chega. O runner confere a persistência e a deduplicação uma vez pelo ID exato antes da retirada. A remoção de uma espera do POST não prova que ela causou a amostra mais lenta. O ensaio original continuou com p99 de **5.054 ms**, 54 ms acima do teto; a medição posterior de 30 minutos está registrada abaixo.
+
+### Soak sustentado após remover uma RPC sem efeito de denúncia/resposta — 24/11/2026
+
+O ensaio anterior de 50 sessões mediu p99 de denúncia em **6.138 ms**, acima do teto de 5 s. A leitura do fluxo mostrou uma chamada sequencial a `triagem_sinais` antes do registro. A rota descartava os dois sinais retornados; o endpoint não os armazenava nem os mostrava à equipe. Mantive a triagem do cadastro em `/api/registrar`, onde o contrato consome seus sinais, e retirei apenas essa chamada consultiva sem efeito das rotas de denúncia e resposta. Limite por origem, Turnstile, deduplicação por ocorrência/origem, resposta neutra e revisão humana permanecem iguais.
+
+O teste de regressão foi executado antes da implementação e falhou como esperado: denúncia e resposta devolviam 503 quando a RPC descartada falhava. Depois da remoção, passaram os 31 testes de `participacao-http.test.ts`, ESLint direcionado e typecheck. O ensaio completo, conectado exclusivamente ao staging `hvekgzxuciyewtybwads`, foi executado das **22:31:04 às 23:01:04 BRT**, por **1.800,6 s com 50 sessões**. Houve zero erros HTTP/backend, zero operações fora dos limites e nenhuma limpeza inconclusiva.
+
+| Operação | Amostras | p50 (ms) | p95 (ms) | p99 (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Início | 724 | 14 | 24 | 445 |
+| Lista de relatos | 794 | 11 | 19 | 250 |
+| Municípios / Goiânia | 1.446 | 7–12 | 11–17 | 19–22 |
+| Dados / API filtrada | 1.442 | 3–10 | 8–21 | 269–308 |
+| Detalhe público sintético | 786 | 8 | 12 | 219 |
+| Cadastro | 6 | 942 | 1.510 | 1.510 |
+| Acompanhamento | 771 | 379 | 1.077 | 1.810 |
+| “Também me afeta” | 74 | 504 | 1.203 | 2.352 |
+| Denúncia | 72 | 493 | 1.117 | 1.941 |
+| Direito de resposta | 72 | 495 | 1.104 | 1.468 |
+| Fila AAL2 | 192 | 811 | 1.990 | 2.986 |
+| Detalhe AAL2 | 191 | 741 | 1.683 | 3.249 |
+| Moderação versionada | 3 | 874 | 889 | 889 |
+| Renovação AAL2 | 6 | 663 | 811 | 811 |
+
+A denúncia melhorou **4.197 ms no p99** em comparação com a execução anterior, e agora está abaixo do teto. O p99 de “Também me afeta” também ficou abaixo do limite (2.352 ms). A fila e o detalhe AAL2 ficaram abaixo de 3 s no p95 e de 5 s no p99. Cadastro, moderação e renovação têm poucas amostras e representam evidência de jornada, não percentis estáveis.
+
+O runner retirou seis relatos com seis eventos de auditoria, encerrou e retirou seis participações, e removeu as três contas fictícias AAL2. A consulta SQL independente encontrou seis relatos em estado removido, seis eventos de exclusão e zero tokens, confirmações, denúncias, respostas ou imagens remanescentes. Uma execução anterior desta retomada perdeu o canal de terminal perto do limite de 30 minutos e deixou seis itens temporários ativos; eles foram identificados pelo marcador único e por uma allowlist exata, fechados por moderador AAL2 e removidos/revogados. Essa execução interrompida não foi usada como evidência de capacidade.
+
+**Limite da evidência:** o runtime medido é Next local ligado ao Supabase staging, numa origem de rede e com 50 VUs HTTP. O resultado comprova a jornada mista do aplicativo e do banco no staging. Não é carga mista pela Vercel Production, não mede redes independentes ou 60 sessões e não registra CPU/pico de conexões do provedor. O soak de 50 abas no alias segue como evidência separada de leitura no caminho Vercel.

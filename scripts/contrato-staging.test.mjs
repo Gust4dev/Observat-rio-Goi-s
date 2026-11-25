@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 
 const origem = 'https://hvekgzxuciyewtybwads.supabase.co';
 const colunas = {
-  v_ocorrencias_publicas: ['id', 'protocolo', 'municipio_id', 'municipio_nome', 'municipio_slug', 'categoria_id', 'categoria_nome', 'categoria_slug', 'titulo', 'descricao', 'situacao', 'verificado', 'publicado_em', 'atualizado_em', 'confirmacoes_total', 'tem_resposta_oficial'],
+  v_ocorrencias_publicas: ['id', 'protocolo', 'municipio_id', 'municipio_nome', 'municipio_slug', 'categoria_id', 'categoria_nome', 'categoria_slug', 'titulo', 'descricao', 'situacao', 'verificado', 'publicado_em', 'atualizado_em', 'confirmacoes_total', 'tem_resposta_oficial', 'gerado'],
   v_imagens_publicas: ['id', 'ocorrencia_id', 'ordem', 'descricao_publica'],
   v_atualizacoes_publicas: ['id', 'ocorrencia_id', 'tipo', 'situacao_nova', 'texto', 'evidencia', 'criado_em'],
   v_respostas_publicas: ['id', 'ocorrencia_id', 'autor_vinculo', 'texto', 'publicada_em'],

@@ -6,6 +6,7 @@ import {
   selecionarMunicipios,
 } from "@/lib/dados/consultas";
 import { lerBuscaMunicipio, lerFiltros, type SearchParamsBrutos } from "@/lib/dados/params";
+import { modoAtual } from "@/lib/modo/servidor";
 import { CartaoProblema } from "./CartaoProblema";
 import { EstadoVazio } from "./EstadoVazio";
 
@@ -49,6 +50,7 @@ export async function ListaProblemas({
   const municipio = municipioFixo ?? f.municipio;
   const categoria = f.categoria;
   const buscaMunicipio = lerBuscaMunicipio(sp.nome_municipio);
+  const { gerados } = await modoAtual();
   const [categorias, catalogo, pagina] = await Promise.all([
     listarCategorias(),
     comSeletorDeMunicipio ? listarMunicipios() : Promise.resolve([]),
@@ -57,7 +59,7 @@ export async function ListaProblemas({
       municipio,
       categoria,
       cursor: cursorBruto,
-    }),
+    }, gerados),
   ]);
   const selecionado = catalogo.find((m) => m.slug === municipio);
   const encontrados = selecionarMunicipios(catalogo, buscaMunicipio);
@@ -183,6 +185,7 @@ export async function ListaProblemas({
                   situacao={p.situacao}
                   publicadoEm={p.publicado_em}
                   temRespostaOficial={p.tem_resposta_oficial}
+                  demonstracao={p.gerado}
                 />
               </li>
             ))}

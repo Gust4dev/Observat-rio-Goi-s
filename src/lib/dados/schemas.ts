@@ -37,11 +37,17 @@ export const problemaListaSchema = z.object({
   categoria_slug: z.string(),
   confirmacoes_total: z.number().int(),
   tem_resposta_oficial: z.boolean(),
+  // Só vem do banco quando o modo de gerados está ligado (027); ausente = relato criado por pessoa.
+  gerado: z.boolean().default(false),
 });
 export type ProblemaLista = z.infer<typeof problemaListaSchema>;
 
 // Resumo dos últimos 7 dias: só o necessário para agregar (subconjunto de COLUNAS_PROBLEMA_LISTA).
 export const COLUNAS_SEMANA = ["id", "municipio_slug", "municipio_nome", "categoria_slug", "categoria_nome"] as const;
+/** Colunas a pedir: `gerado` só existe/precisa ser lido quando o modo de gerados está ligado. */
+export function comGerado<T extends readonly string[]>(colunas: T, gerados: boolean): readonly string[] {
+  return gerados ? [...colunas, "gerado"] : colunas;
+}
 export const semanaSchema = problemaListaSchema.pick({
   id: true, municipio_slug: true, municipio_nome: true, categoria_slug: true, categoria_nome: true,
 });
@@ -63,6 +69,7 @@ export const problemaDetalheSchema = z.object({
   categoria_slug: z.string(),
   confirmacoes_total: z.number().int(),
   tem_resposta_oficial: z.boolean(),
+  gerado: z.boolean().default(false),
 });
 export type ProblemaDetalhe = z.infer<typeof problemaDetalheSchema>;
 

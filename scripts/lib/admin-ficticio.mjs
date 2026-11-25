@@ -75,7 +75,8 @@ export async function criarAdminFicticio({ papel = 'superadmin', fetch: transpor
   const api = (path, options) => requisicao(config, path, options, transportar);
   async function cleanup() {
     if (cleaned || !userId) return;
-    // Supabase FK is not relied on for deleting the team row.
+    // Delete only this generated fixture. Audit rows retain their event and
+    // anonymize admin_id through the database FK's ON DELETE SET NULL.
     let falha;
     try {
       const q = new URLSearchParams({ user_id: `eq.${userId}` });
@@ -83,19 +84,20 @@ export async function criarAdminFicticio({ papel = 'superadmin', fetch: transpor
     } catch (error) { falha = error; }
     if (!falha) {
       try {
-        const historico = await api(`/rest/v1/historico_moderacao?${new URLSearchParams({ select: 'id', admin_id: `eq.${userId}`, limit: '1' })}`, { service: true });
-        if (Array.isArray(historico) && historico.length > 0) {
-          if (accessToken) await api('/auth/v1/logout', { method: 'POST', token: accessToken }).catch(() => {});
-          await api(`/auth/v1/admin/users/${userId}`, { method: 'PUT', service: true, body: { ban_duration: '876000h' } });
-          cleaned = true;
-          return { equipe_removida: true, conta_auth: 'bloqueada; preservada por referência do histórico imutável' };
-        }
+        if (accessToken) await api('/auth/v1/logout', { method: 'POST', token: accessToken }).catch(() => {});
         await api(`/auth/v1/admin/users/${userId}`, { method: 'DELETE', service: true });
+        const restante = await api(`/rest/v1/administradores?${new URLSearchParams({ select: 'user_id', user_id: `eq.${userId}`, limit: '1' })}`, { service: true });
+        if (!Array.isArray(restante) || restante.length !== 0) throw new Error('Linha da equipe de teste ainda existe.');
+        const authCheck = await transportar(`${config.base}/auth/v1/admin/users/${userId}`, {
+          method: 'GET', cache: 'no-store', signal: AbortSignal.timeout(12_000),
+          headers: { ...supabaseApiHeaders(config.service) },
+        });
+        if (authCheck.status !== 404) throw new Error('Conta Auth de teste ainda existe.');
       } catch (error) { falha ??= error; }
     }
     if (falha) throw falha;
     cleaned = true;
-    return { equipe_removida: true, conta_auth: 'removida' };
+    return { equipe_removida: true, conta_auth: 'removida', auditoria: 'admin_id anonimizado por FK' };
   }
   try {
     etapa = 'criação do usuário Auth';

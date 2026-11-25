@@ -1,24 +1,33 @@
 import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { Agent as HttpAgent, request as httpRequest } from 'node:http';
 import { createServer } from 'node:net';
+import { mkdtempSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { criarAdminFicticio, codigoTotp } from './lib/admin-ficticio.mjs';
-import { executarCicloFotos } from './lib/fotos-staging.mjs';
+import { executarCicloFotos, verificarStagingFotos } from './lib/fotos-staging.mjs';
 import { resolveSupabaseKeys, supabaseApiHeaders } from '../src/lib/supabase-keys.mjs';
 
 const REF = 'hvekgzxuciyewtybwads';
+const somenteModeracaoMvp = process.argv.includes('--moderacao-mvp');
+const somenteFotosMvp = process.argv.includes('--fotos-mvp');
+const somenteConsoleMvp = process.argv.includes('--console-mvp');
+const denunciaMvp = 'Denúncia sintética para o E2E de moderação.';
+const respostaMvp = 'Resposta sintética para validar revisão e publicação antes da retirada pelo titular.';
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const falhas = [];
 const eventosOperacionais = [];
 const ocorrencias = [];
+const atualizacoesConsole = [];
 const excluidas = new Set();
 let faseAtual = 'preparação';
 let servidor;
 let admin;
 let membroId;
 let limpezaAdmin;
+let limpezaParticipacao;
 let baseApp;
 let hmac;
 let accessBasic;
@@ -233,17 +242,50 @@ async function atualizar(id, situacao, evidencia) {
   return result;
 }
 
-async function executarFotos(env, appUrl) {
-  const keys = resolveSupabaseKeys(env);
-  await executarCicloFotos({
-    base: env.NEXT_PUBLIC_SUPABASE_URL,
-    anon: keys.publicKey,
-    service: keys.secretKey,
-    app: appUrl,
-    adminToken: admin.accessToken,
-    hmac,
-    basic: Buffer.from(`${env.ACESSO_STAGING_USUARIO}:${env.ACESSO_STAGING_SENHA}`).toString('base64'),
-  });
+function consultarVisibilidadeDireta({ role, aal, userId, fixtureId, publico = false }) {
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+  if (!uuid.test(fixtureId) || (userId && !uuid.test(userId)) || !['anon', 'authenticated'].includes(role)) {
+    throw new Error('Parâmetros da prova RLS inválidos.');
+  }
+  const claims = JSON.stringify({ role, aal, sub: userId ?? '' }).replaceAll("'", "''");
+  const query = [
+    'BEGIN READ ONLY;',
+    `SELECT set_config('request.jwt.claims','${claims}',true);`,
+    `SELECT set_config('request.jwt.claim.sub','${userId ?? ''}',true);`,
+    `SET LOCAL ROLE ${role};`,
+    `SELECT count(*)::int AS visible_rows FROM public.${publico ? 'v_ocorrencias_publicas' : 'ocorrencias'} WHERE id='${fixtureId}';`,
+    'ROLLBACK;',
+  ].join('\n');
+  const tempDir = mkdtempSync(path.join(tmpdir(), 'og-e2e-sec-'));
+  const queryFile = path.join(tempDir, 'rls.sql');
+  try {
+    writeFileSync(queryFile, query, { encoding: 'utf8', flag: 'wx' });
+    const bin = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+    const result = spawnSync(bin, ['--yes', 'supabase', 'db', 'query', `--remote=${REF}`, '--yes', '--output-format', 'json', '--file', queryFile], {
+      cwd: raiz, env: process.env, encoding: 'utf8', windowsHide: true, shell: process.platform === 'win32',
+    });
+    if (result.error || result.status !== 0) throw new Error('Consulta de isolamento RLS falhou.');
+    const start = result.stdout.indexOf('{\n  "boundary":');
+    const end = result.stdout.lastIndexOf('\n}');
+    if (start < 0 || end <= start) throw new Error('Consulta de isolamento RLS sem resultado estruturado.');
+    const parsed = JSON.parse(result.stdout.slice(start, end + 2));
+    const count = parsed.rows?.[0]?.visible_rows;
+    if (!Number.isInteger(count)) throw new Error('Consulta de isolamento RLS sem contagem.');
+    return count;
+  } finally {
+    unlinkSync(queryFile);
+    rmdirSync(tempDir);
+  }
+}
+
+function verificarIsolamentoDireto(fixtureId, adminId) {
+  const publico = consultarVisibilidadeDireta({ role: 'anon', aal: 'aal0', fixtureId, publico: true });
+  const semPapel = consultarVisibilidadeDireta({ role: 'authenticated', aal: 'aal2', userId: randomUUID(), fixtureId });
+  const adminAal1 = consultarVisibilidadeDireta({ role: 'authenticated', aal: 'aal1', userId: adminId, fixtureId });
+  const adminAal2 = consultarVisibilidadeDireta({ role: 'authenticated', aal: 'aal2', userId: adminId, fixtureId });
+  exigir(publico === 0 && semPapel === 0 && adminAal1 === 0 && adminAal2 === 1,
+    'RLS não isolou anon, usuário sem papel, admin AAL1 e admin AAL2 como esperado.');
+  return { anon: publico, sem_papel: semPapel, admin_aal1: adminAal1, admin_aal2: adminAal2 };
 }
 
 async function excluirFixtures() {
@@ -265,14 +307,196 @@ async function limparMembroConvidado() {
   const q = new URLSearchParams({ user_id: `eq.${membroId}` });
   const { secretKey } = resolveSupabaseKeys(process.env);
   await rest(`administradores?${q}`, { method: 'DELETE', key: secretKey });
-  await fetch(new URL(`/auth/v1/admin/users/${membroId}`, process.env.NEXT_PUBLIC_SUPABASE_URL), {
-    method: 'DELETE', cache: 'no-store', signal: AbortSignal.timeout(12000),
-    headers: supabaseApiHeaders(secretKey),
-  }).then((r) => { if (!r.ok && r.status !== 404) throw new Error(`Auth cleanup HTTP ${r.status}`); });
+  const restantes = await rest(`administradores?${new URLSearchParams({ select: 'user_id', user_id: `eq.${membroId}`, limit: '1' })}`, { key: secretKey });
+  if (!Array.isArray(restantes) || restantes.length !== 0) throw new Error('Linha de equipe de teste ainda existe.');
+  const authUrl = new URL(`/auth/v1/admin/users/${membroId}`, process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const headers = supabaseApiHeaders(secretKey);
+  const deletion = await fetch(authUrl, { method: 'DELETE', cache: 'no-store', signal: AbortSignal.timeout(12000), headers });
+  if (!deletion.ok && deletion.status !== 404) throw new Error(`Auth cleanup HTTP ${deletion.status}`);
+  const authCheck = await fetch(authUrl, { method: 'GET', cache: 'no-store', signal: AbortSignal.timeout(12000), headers });
+  if (authCheck.status !== 404) throw new Error('Conta de equipe de teste ainda existe.');
+}
+
+async function moderacaoMvp(principal, keys) {
+  const endpoint = `/api/admin/ocorrencias/${principal.id}`;
+  const detalhe = () => appAdmin(endpoint).then(resultado => ok(resultado, 200, 'detalhe administrativo'));
+  const alterar = (acao, versao, extra = {}) => moderar(principal.id, acao, { versao_esperada: versao, ...extra });
+  faseAtual = 'publicação e fila de relatos publicados';
+  const inicial = await detalhe();
+  await alterar('aprovar', inicial.ocorrencia.versao_admin);
+  const fila = ok(await appAdmin('/api/admin/fila?ordem=recentes&moderacao=publicado'), 200, 'fila de publicados');
+  exigir(fila.itens.some(i => i.id === principal.id), 'Fixture publicada sem pendências ausente da fila.');
+
+  faseAtual = 'denúncia pública e decisão AAL2';
+  ok(await app('/api/denunciar', { method: 'POST', cookie: false, body: {
+    ocorrencia_id: principal.id, motivo: 'outro', texto: denunciaMvp, turnstile: turnstileTestToken,
+  } }), 202, 'denúncia pública');
+  const denuncias = ok(await appAdmin(`/api/admin/denuncias?ocorrencia_id=${principal.id}&status=aberta`), 200, 'fila de denúncias');
+  exigir(denuncias.itens?.length === 1, 'Esperada uma denúncia da fixture.');
+  const denuncia = denuncias.itens[0];
+  ok(await appAdmin(`/api/admin/denuncias/${denuncia.id}/resolver`, { method: 'POST',
+    body: { status: 'procedente', versao_esperada: denuncia.versao_admin },
+  }), 200, 'resolução da denúncia');
+
+  faseAtual = 'direito de resposta e decisão AAL2';
+  ok(await app('/api/resposta', { method: 'POST', cookie: false, body: {
+    ocorrencia_id: principal.id, vinculo: 'Representante fictício E2E', contato: 'moderacao@example.invalid',
+    texto: respostaMvp, turnstile: turnstileTestToken,
+  } }), 202, 'envio de resposta');
+  const respostas = ok(await appAdmin(`/api/admin/respostas?ocorrencia_id=${principal.id}&status=pendente`), 200, 'fila de respostas');
+  exigir(respostas.itens?.length === 1, 'Esperada uma resposta da fixture.');
+  const resposta = respostas.itens[0];
+  const visibilidade = () => rest(`v_respostas_publicas?ocorrencia_id=eq.${principal.id}&select=id`, { key: keys.publicKey });
+  exigir((await visibilidade()).length === 0, 'Resposta pendente apareceu publicamente.');
+  ok(await appAdmin(`/api/admin/respostas/${resposta.id}/revisar`, { method: 'POST',
+    body: { acao: 'publicar', versao_esperada: resposta.versao_admin },
+  }), 200, 'revisão da resposta');
+  exigir((await visibilidade()).some(linha => String(linha.id) === String(resposta.id)), 'Resposta revisada ausente na superfície pública.');
+
+  faseAtual = 'retirada administrativa e auditoria';
+  const atual = await detalhe();
+  await alterar('remover', atual.ocorrencia.versao_admin, { motivo_codigo: 'outro', motivo: 'Retirada da fixture sintética da jornada.' });
+  exigir((await visibilidade()).length === 0, 'Resposta permaneceu pública após remoção do relato.');
+  const auditoria = ok(await appAdmin(`/api/admin/auditoria?ocorrencia_id=${principal.id}&limite=30`), 200, 'auditoria');
+  const acoes = new Set(auditoria.map(evento => evento.acao));
+  exigir(['aprovar', 'resolver_denuncia', 'resposta_publicar', 'remover'].every(acao => acoes.has(acao)), 'Evento esperado ausente da auditoria.');
+  faseAtual = 'retirada definitiva e revogação do token';
+  const excluidas = await excluirFixtures();
+  exigir(excluidas === 1, 'Não foi possível comprovar a retirada pelo titular.');
+  const visivel = await rest(`v_ocorrencias_publicas?id=eq.${principal.id}&select=id`, { key: keys.publicKey });
+  exigir(visivel.length === 0, 'Fixture permaneceu pública após limpeza.');
+  const token = await app('/api/acompanhar', { method: 'POST', cookie: false, body: { token: principal.token } });
+  exigir(token.response.status === 404, 'Token de acompanhamento ainda funciona após retirada definitiva.');
+}
+
+async function limparParticipacaoMvp(fixtures, key) {
+  const apagadas = { denuncias: 0, respostas: 0 };
+  for (const fixture of fixtures) {
+    exigir(excluidas.has(fixture.id), 'Participação só é limpa depois de retirar a fixture.');
+    for (const [tabela, marcador, contato] of [
+      ['denuncias', denunciaMvp],
+      ['respostas', respostaMvp, 'moderacao@example.invalid'],
+    ]) {
+      const filtro = new URLSearchParams({ ocorrencia_id: `eq.${fixture.id}`, texto: `eq.${marcador}`,
+        ...(contato ? { contato: `eq.${contato}` } : {}) });
+      const localizar = () => rest(`${tabela}?${filtro}&select=id::text&limit=2`, { key });
+      const linhas = await localizar();
+      exigir(Array.isArray(linhas) && linhas.length <= 1, 'Identidade da participação sintética inconclusiva.');
+      if (!linhas.length) continue;
+      exigir(/^[1-9][0-9]*$/.test(linhas[0].id), 'Identificador da participação sintética inválido.');
+      filtro.set('id', `eq.${linhas[0].id}`);
+      await rest(`${tabela}?${filtro}`, { method: 'DELETE', key });
+      exigir((await localizar()).length === 0, 'Participação sintética permanece após a limpeza.');
+      apagadas[tabela]++;
+    }
+  }
+  return apagadas;
+}
+
+async function consoleMvp(municipio, categoria) {
+  const marcador = `[E2E-CONSOLE:${randomUUID()}]`;
+  faseAtual = 'cadastros sintéticos do console';
+  const destino = await criarOcorrencia(marcador, municipio, categoria);
+  const origem = await criarOcorrencia(marcador, municipio, categoria);
+  const lerDetalhe = async item => ok(await appAdmin(`/api/admin/ocorrencias/${item.id}`), 200, 'detalhe da fixture');
+  const [d1, o1] = await Promise.all([lerDetalhe(destino), lerDetalhe(origem)]);
+  faseAtual = 'atomicidade e versão do lote';
+  const lote = versoes => appAdmin('/api/admin/ocorrencias/lote', { method: 'POST', body: {
+    ids: [destino.id, origem.id], versoes_esperadas: versoes, acao: 'aprovar',
+  } });
+  const versoes = [d1.ocorrencia.versao_admin, o1.ocorrencia.versao_admin];
+  ok(await lote([versoes[0], versoes[1] + 1]), 409, 'lote com versão obsoleta');
+  const aposConflito = await Promise.all([lerDetalhe(destino), lerDetalhe(origem)]);
+  exigir(aposConflito.every((objeto, i) => objeto.ocorrencia.moderacao === 'pendente'
+    && objeto.ocorrencia.versao_admin === versoes[i]), 'Lote obsoleto aplicou moderação parcial.');
+  const aprovadas = ok(await lote(versoes), 200, 'aprovação em lote');
+  exigir(Array.isArray(aprovadas) && aprovadas.length === 2, 'Lote não confirmou os dois relatos.');
+
+  faseAtual = 'situação, atualização pública e nota interna';
+  const caminhoDestino = `/api/admin/ocorrencias/${destino.id}`;
+  const detalheDestino = await lerDetalhe(destino);
+  const publicar = (subrota, body) => appAdmin(`${caminhoDestino}/${subrota}`, { method: 'POST', body });
+  const textoSituacao = `${marcador} Situação sintética em atendimento.`;
+  const textoAtualizacao = `${marcador} Atualização sintética pública.`;
+  const textoNota = `${marcador} Nota sintética interna.`;
+  atualizacoesConsole.push(...[textoSituacao, textoAtualizacao, textoNota].map(texto => ({ id: destino.id, texto })));
+  ok(await publicar('situacao', { situacao: 'em_atendimento', texto: textoSituacao, publica: true,
+    versao_esperada: detalheDestino.ocorrencia.versao_admin }), 200, 'mudança de situação');
+  ok(await publicar('atualizacoes', { tipo: 'providencia', texto: textoAtualizacao, publica: true }), 200, 'atualização pública');
+  ok(await publicar('atualizacoes', { tipo: 'nota', texto: textoNota, publica: true }), 200, 'nota interna');
+  const linhas = await rest(`v_atualizacoes_publicas?select=texto&ocorrencia_id=eq.${destino.id}`);
+  const textosPublicos = new Set(linhas.map(linha => linha.texto));
+  exigir(textosPublicos.size === 2 && textosPublicos.has(textoSituacao) && textosPublicos.has(textoAtualizacao)
+    && !textosPublicos.has(textoNota), 'Projeção pública misturou visibilidades de atualização.');
+  const titular = ok(await app('/api/acompanhar', { method: 'POST', cookie: false, body: { token: destino.token } }), 200, 'acompanhamento da situação');
+  exigir(titular.situacao === 'em_atendimento' && titular.atualizacoes.length === 2
+    && !titular.atualizacoes.some(atualizacao => atualizacao.texto === textoNota), 'Acompanhamento divergiu da situação ou expôs nota interna.');
+  ok(await appAdmin(`${caminhoDestino}/contato`), 200, 'leitura auditada de contato da fixture anônima');
+
+  faseAtual = 'mesclagem de duplicidade';
+  const [d2, o2] = await Promise.all([lerDetalhe(destino), lerDetalhe(origem)]);
+  ok(await appAdmin(`/api/admin/ocorrencias/${origem.id}/mesclar`, { method: 'POST', body: {
+    destino: destino.id, motivo: `${marcador} Mescla de relatos estritamente sintéticos.`,
+    versao_esperada: o2.ocorrencia.versao_admin, versao_destino_esperada: d2.ocorrencia.versao_admin,
+  } }), 200, 'mescla de duplicidade');
+  const [publicoDestino, publicaOrigem] = await Promise.all([destino, origem].map(item => rest(`v_ocorrencias_publicas?select=id&id=eq.${item.id}`)));
+  exigir(publicoDestino.length === 1 && publicaOrigem.length === 0, 'Mescla divergiu da projeção pública.');
+
+  faseAtual = 'gestão de equipe com SMTP desativado';
+  const convite = ok(await appAdmin('/api/admin/equipe/convidar', { method: 'POST', body: {
+    email: `e2e-console-${randomUUID()}@example.invalid`, papel: 'moderador', motivo: `${marcador} Convite fictício.`,
+  } }), 200, 'convite sem email');
+  membroId = convite.user_id;
+  exigir(typeof membroId === 'string' && typeof convite.link_convite === 'string' && convite.convite_enviado !== true,
+    'Convite não retornou link manual ou indicou envio de email.');
+  ok(await appAdmin(`/api/admin/equipe/${membroId}/papel`, { method: 'POST', body: {
+    papel: 'gestor', motivo: `${marcador} Alteração fictícia de papel.`,
+  } }), 200, 'alteração de papel');
+  const equipe = ok(await appAdmin('/api/admin/equipe'), 200, 'lista da equipe');
+  exigir(equipe.some(item => item.user_id === membroId && item.papel === 'gestor' && item.ativo), 'Papel alterado ausente da equipe.');
+  ok(await appAdmin(`/api/admin/equipe/${membroId}/desativar`, { method: 'POST', body: {
+    motivo: `${marcador} Desativação fictícia.`,
+  } }), 200, 'desativação de membro');
+  const equipeDepois = ok(await appAdmin('/api/admin/equipe'), 200, 'equipe após desativação');
+  exigir(equipeDepois.some(item => item.user_id === membroId && item.ativo === false), 'Desativação não persistiu.');
+
+  faseAtual = 'auditoria das ações do console';
+  const [historicoDestino, historicoOrigem, historicoEquipe] = await Promise.all([
+    appAdmin(`/api/admin/auditoria?ocorrencia_id=${destino.id}&limite=30`).then(r => ok(r, 200, 'auditoria de destino')),
+    appAdmin(`/api/admin/auditoria?ocorrencia_id=${origem.id}&limite=30`).then(r => ok(r, 200, 'auditoria de origem')),
+    appAdmin(`/api/admin/auditoria?admin_id=${admin.userId}&limite=30`).then(r => ok(r, 200, 'auditoria de equipe')),
+  ]);
+  for (const [eventos, esperados] of [
+    [historicoDestino, ['aprovar', 'atualizar_situacao', 'adicionar_atualizacao', 'ver_contato']],
+    [historicoOrigem, ['aprovar', 'mesclar_duplicata']],
+    [historicoEquipe, ['equipe_convidar', 'equipe_papel', 'equipe_desativar']],
+  ]) exigir(esperados.every(acao => eventos.some(evento => evento.acao === acao)), 'Auditoria não contém todas as ações esperadas.');
+  return { relatos: [destino.id, origem.id], conflito_lote: 409, publicas: textosPublicos.size, nota_publica: false, smtp: 'link manual' };
+}
+
+async function conferirResiduosConsole(key) {
+  let total = 0;
+  for (const { id } of ocorrencias) {
+    exigir(excluidas.has(id), 'Não foi possível confirmar a retirada do relato sintético.');
+    const [publicos, atualizacoes] = await Promise.all([
+      rest(`v_ocorrencias_publicas?select=id&id=eq.${id}`),
+      rest(`v_atualizacoes_publicas?select=id&ocorrencia_id=eq.${id}`),
+    ]);
+    exigir(publicos.length === 0 && atualizacoes.length === 0, 'Relato ou atualização da fixture ainda público.');
+    exigir((await app(`/problema/${id}`, { cookie: false })).response.status === 404, 'Detalhe da fixture retirada ainda não retorna 404.');
+  }
+  for (const { id, texto } of atualizacoesConsole) {
+    const filtro = new URLSearchParams({ ocorrencia_id: `eq.${id}`, texto: `eq.${texto}` });
+    const linhas = await rest(`atualizacoes?${filtro}&select=id::text&limit=2`, { key });
+    exigir(Array.isArray(linhas) && linhas.length <= 1, 'Identidade da atualização sintética inconclusiva.');
+    total += linhas.length;
+  }
+  return total;
 }
 
 async function main() {
   let feito = false;
+  let isolamentoDb;
   try { process.loadEnvFile(path.join(raiz, '.env.local')); } catch { /* environment may be injected */ }
   const supabase = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '');
   exigir(supabase.protocol === 'https:' && supabase.hostname === `${REF}.supabase.co` && supabase.pathname === '/' && !supabase.search && !supabase.hash,
@@ -294,7 +518,7 @@ async function main() {
   const env = {
     ...process.env,
     NODE_ENV: 'production', VERCEL: '0', VERCEL_ENV: 'preview',
-    AMBIENTE_REGISTRO: 'staging_ficticio', MODO_PUBLICACAO: 'moderar_tudo', FOTOS_HABILITADAS: 'true',
+    AMBIENTE_REGISTRO: 'staging_ficticio', MODO_PUBLICACAO: 'moderar_tudo', FOTOS_HABILITADAS: String(somenteFotosMvp), E2E_SUPPRESS_SMTP: 'true',
     TURNSTILE_SECRET: turnstileTestSecret, HMAC_SEGREDO: hmac,
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: turnstileTestSiteKey,
     LIMITE_REGISTRO_MAXIMO: rateValue(), LIMITE_ACOMPANHAR_MAXIMO: rateValue(), LIMITE_EXCLUIR_MAXIMO: rateValue(),
@@ -306,13 +530,29 @@ async function main() {
     PORT: String(port), HOSTNAME: '127.0.0.1',
   };
 
+  let fotos;
+  let consoleValidado;
+  let atualizacoesRetidas;
   try {
+    exigir([somenteFotosMvp, somenteModeracaoMvp, somenteConsoleMvp].filter(Boolean).length <= 1, 'Escolha somente um perfil E2E.');
+    if (somenteFotosMvp) {
+      exigir(!somenteModeracaoMvp, 'Escolha somente um perfil E2E.');
+      faseAtual = 'preflight de foto no staging';
+      await verificarStagingFotos({ base: supabase.origin, anon: keys.publicKey, service: keys.secretKey });
+    }
     faseAtual = 'admin fictício e MFA';
     admin = await criarAdminFicticio({ papel: 'superadmin' });
     faseAtual = 'build de produção';
     await executarBuild(env);
     servidor = iniciarApp(port, env);
     await esperarApp(servidor, baseApp);
+    if (somenteFotosMvp) {
+      faseAtual = 'ciclo de fotos';
+      fotos = await executarCicloFotos({ base: supabase.origin, anon: keys.publicKey, service: keys.secretKey,
+        app: baseApp, adminToken: admin.accessToken, hmac, basic: accessBasic });
+      feito = true;
+      return;
+    }
     await autenticarMfa();
 
     faseAtual = 'referências públicas de teste';
@@ -321,8 +561,20 @@ async function main() {
     exigir(municipios?.[0]?.slug && categorias?.[0]?.slug, 'Staging sem município/categoria pública para fixture.');
     const municipio = municipios[0]; const categoria = categorias[0];
 
+    if (somenteConsoleMvp) {
+      consoleValidado = await consoleMvp(municipio, categoria);
+      feito = true;
+      return;
+    }
     faseAtual = 'registro fictício';
-    const principal = await criarOcorrencia('[E2E]', municipio, categoria);
+    const principal = await criarOcorrencia('[E2E-SEC]', municipio, categoria);
+    if (somenteModeracaoMvp) {
+      await moderacaoMvp(principal, keys);
+      feito = true;
+      return;
+    }
+    faseAtual = 'RLS direto no banco';
+    isolamentoDb = verificarIsolamentoDireto(principal.id, admin.userId);
     faseAtual = 'fila e moderação';
     faseAtual = 'fila administrativa';
     const fila = ok(await appAdmin('/api/admin/fila?limite=100&ordem=recentes'), 200, 'fila administrativa');
@@ -353,8 +605,8 @@ async function main() {
     ok(await appAdmin(`/api/admin/respostas/${respostas[0].id}/revisar`, { method: 'POST', body: { acao: 'publicar' } }), 200, 'revisão de resposta');
 
     faseAtual = 'mesclagem de duplicidade';
-    const destino = await criarOcorrencia('[E2E-DUPLICATA-DESTINO]', municipio, categoria);
-    const duplicata = await criarOcorrencia('[E2E-DUPLICATA-ORIGEM]', municipio, categoria);
+    const destino = await criarOcorrencia('[E2E-SEC-DUPLICATA-DESTINO]', municipio, categoria);
+    const duplicata = await criarOcorrencia('[E2E-SEC-DUPLICATA-ORIGEM]', municipio, categoria);
     await moderar(destino.id, 'aprovar'); await moderar(duplicata.id, 'aprovar');
     ok(await appAdmin(`/api/admin/ocorrencias/${duplicata.id}/mesclar`, { method: 'POST', body: { destino: destino.id, motivo: 'Duplicidade criada pelo teste fictício E2E.' } }), 200, 'mesclagem de duplicidade');
     const fontePublica = await rest(`v_ocorrencias_publicas?select=id&id=eq.${duplicata.id}`, { key: keys.publicKey });
@@ -372,11 +624,10 @@ async function main() {
     const auditoria = ok(await appAdmin('/api/admin/auditoria?acao=equipe_desativar&limite=100'), 200, 'leitura de auditoria');
     exigir(Array.isArray(auditoria) && auditoria.some((row) => row.acao === 'equipe_desativar'), 'Ação de equipe ausente da auditoria.');
 
-    faseAtual = 'fotos em quarentena';
+    faseAtual = 'gate de fotos fechado';
     const afeta = await app('/api/afeta', { method: 'POST', cookie: false, body: {} });
     exigir(afeta.response.status === 503, 'ADR-0004 exige endpoint de confirmação desligado.');
-
-    await executarFotos(env, baseApp);
+    exigir(env.FOTOS_HABILITADAS === 'false', 'Perfil textual de segurança não pode habilitar fotos.');
 
     faseAtual = 'indicadores e supressão';
     const dados = ok(await app('/api/dados?formato=json', { cookie: false }), 200, 'indicadores públicos');
@@ -386,8 +637,20 @@ async function main() {
       && (row.total - row.com_resposta_oficial === 0 || row.total - row.com_resposta_oficial >= 5)
       && (row.resolvidas_documentadas === 0 || row.resolvidas_documentadas >= 5)
       && (row.total - row.resolvidas_documentadas === 0 || row.total - row.resolvidas_documentadas >= 5)), 'Exportação contém célula/subcontagem abaixo do limiar k=5.');
-    const cellView = await rest('v_dados_painel?select=id,total,com_resposta_oficial,resolvidas_documentadas&limit=5000', { key: keys.publicKey });
+    const cellView = await rest('v_dados_painel?select=id,municipio_slug,total,com_resposta_oficial,resolvidas_documentadas&limit=5000', { key: keys.publicKey });
     exigir(Array.isArray(cellView) && cellView.length === dados.dados.length && cellView.every((row) => row.total >= 5), 'View do banco não aplicou supressão antes da exportação.');
+    const globals = await rest('v_indicadores_gerais?select=total_ocorrencias,municipios_com_registros,com_resposta_oficial,resolvidas_documentadas&limit=1', { key: keys.publicKey });
+    const cohortTotals = await rest('v_indicadores_municipio_categoria?select=total&limit=5000', { key: keys.publicKey });
+    const monthlyTotals = await rest('v_indicadores_mensal?select=total&limit=5000', { key: keys.publicKey });
+    const statusTotals = await rest('v_indicadores_situacao?select=total&limit=5000', { key: keys.publicKey });
+    const sum = (rows, key = 'total') => rows.reduce((total, row) => total + row[key], 0);
+    const indicatorsMatch = Array.isArray(globals) && globals.length === 1
+      && globals[0].total_ocorrencias === sum(cellView)
+      && globals[0].municipios_com_registros === new Set(cellView.map((row) => row.municipio_slug)).size
+      && globals[0].com_resposta_oficial === sum(cellView, 'com_resposta_oficial')
+      && globals[0].resolvidas_documentadas === sum(cellView, 'resolvidas_documentadas')
+      && sum(cohortTotals) === sum(cellView) && sum(monthlyTotals) === sum(cellView) && sum(statusTotals) === sum(cellView);
+    exigir(indicatorsMatch, 'Totais globais/coortes permitem recuperar contagens suprimidas.');
 
     faseAtual = 'exclusões dos relatos e sessão';
     const excluidas = await excluirFixtures();
@@ -405,14 +668,31 @@ async function main() {
     falhas.push(detalhe);
   } finally {
     const excluidas = await excluirFixtures();
+    if (somenteConsoleMvp) {
+      if (excluidas !== ocorrencias.length) falhas.push('Limpeza incompleta das fixtures do console.');
+      try {
+        atualizacoesRetidas = await conferirResiduosConsole(keys.secretKey);
+        if (feito && atualizacoesRetidas !== 3) falhas.push('Retenção das três atualizações de histórico não comprovada.');
+      } catch { falhas.push('Visibilidade e retenção das atualizações sintéticas não comprovadas.'); }
+    }
+    if (somenteModeracaoMvp) {
+      try { limpezaParticipacao = await limparParticipacaoMvp(ocorrencias, keys.secretKey); }
+      catch { falhas.push('Limpeza das participações sintéticas não comprovada.'); }
+    }
     try { await limparMembroConvidado(); } catch { falhas.push('Limpeza de convite fictício não comprovada.'); }
-    if (admin) try { limpezaAdmin = await admin.cleanup(); } catch { falhas.push('Limpeza do administrador fictício não comprovada.'); }
+    if (admin) try {
+      limpezaAdmin = await admin.cleanup();
+      if (limpezaAdmin?.equipe_removida !== true || limpezaAdmin?.conta_auth !== 'removida') falhas.push('Limpeza do administrador fictício não comprovada.');
+    } catch { falhas.push('Limpeza do administrador fictício não comprovada.'); }
     await removerProcesso(servidor);
     agenteApp.destroy();
     if (falhas.length) {
       console.error(JSON.stringify({ e2e: 'pendente', falhas, diagnosticos: eventosOperacionais, limpeza_admin: limpezaAdmin, relatos_excluidos: excluidas, relatos_criados: ocorrencias.length, residuo_esperado: 'linhas anonimizadas e eventos em historico_moderacao permanecem por auditoria somente-inserção' }));
       process.exitCode = 1;
-    } else if (feito) console.log(JSON.stringify({ e2e: 'aprovado', registros_ficticios: ocorrencias.length, exclusoes_confirmadas: excluidas, fotos: 'ciclo concluído', supressao: 'k=5 verificada', limpeza_admin: limpezaAdmin, auditoria: 'resíduo somente-inserção preservado' }));
+    } else if (feito && somenteFotosMvp) console.log(JSON.stringify({ e2e: 'aprovado', perfil: 'fotos-mvp', fotos, limpeza_admin: limpezaAdmin }));
+    else if (feito && somenteConsoleMvp) console.log(JSON.stringify({ e2e: 'aprovado', perfil: 'console-mvp', console: consoleValidado, exclusoes_confirmadas: excluidas, atualizacoes_append_only: atualizacoesRetidas, limpeza_admin: limpezaAdmin }));
+    else if (feito && somenteModeracaoMvp) console.log(JSON.stringify({ e2e: 'aprovado', perfil: 'moderacao-mvp', registros_ficticios: ocorrencias.length, exclusoes_confirmadas: excluidas, fase_final: faseAtual, limpeza_admin: limpezaAdmin, limpeza_participacao: limpezaParticipacao, auditoria: 'aprovar, resolver_denuncia, resposta_publicar, remover; histórico preservado' }));
+    else if (feito) console.log(JSON.stringify({ e2e: 'aprovado', registros_ficticios: ocorrencias.length, exclusoes_confirmadas: excluidas, rls_direto: isolamentoDb, smtp: 'convite gerado sem chamada de envio', fotos: 'desligadas; ciclo jurídico omitido', supressao: 'k=5 e diferença global verificada', limpeza_admin: limpezaAdmin, auditoria: 'resíduo somente-inserção preservado' }));
   }
 }
 

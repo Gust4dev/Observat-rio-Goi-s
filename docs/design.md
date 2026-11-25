@@ -23,7 +23,7 @@
 | Referência | Interface territorial de serviço cívico na home, com linguagem direta e ficha editorial no detalhe. | A pessoa que chega por link cai dentro da informação do relato, em vez de uma apresentação institucional genérica. |
 | Cor | Creme e verde-floresta preservados com intenção; ouro pontual em notas/demonstração; azul petróleo reservado a dados e informação. Filete cromático estreito sujeito à comparação visual de neutralidade. | Mantém calor regional sem evocar bandeira ou sinal partidário; a cor de ação continua previsível. |
 | Tipografia | Manrope para títulos e números; Source Sans 3 para leitura e campos; fallback de sistema quando a fonte não carrega. | Separa orientação de conteúdo sem sacrificar leitura em tela pequena ou conexão lenta. |
-| Layout | Conteúdo centrado no trabalho: detalhe como ficha, lista como sequência de relatos, registro como formulário progressivo. Home: ação antes do mapa no celular; a partir de 768 px texto/ação e mapa lado a lado, sem proporção fixa. Detalhe e formulário preservam largura de leitura. | Evita o hero centralizado com três benefícios e mantém a ação principal perto do começo. |
+| Layout | Conteúdo centrado no trabalho: detalhe como ficha, lista como sequência de relatos, registro como formulário progressivo. Home: coluna única até 1023 px. A partir de 1024 px, texto e ações à esquerda e mapa à direita. Detalhe e formulário preservam largura de leitura. | Evita o hero centralizado com três benefícios e mantém a ação principal perto do começo. |
 
 Motivos visuais permitidos: (1) a linha de registro e seus marcadores para cronologia/progresso; (2) coordenadas tipográficas — município, categoria, protocolo e data alinhados como metadados. Não adicionar ruído/grão, textura, gradiente, mapa abstrato decorativo ou sombra macia. Cartões são usados quando agrupam ações ou conteúdo relacionado; listas podem ser separadas por divisores e variação tipográfica para não parecerem uma pilha uniforme de caixas.
 
@@ -138,11 +138,11 @@ Grade: 360/375 = uma coluna; 768 = duas colunas só para módulos independentes 
 
 O mapa interativo de Goiás é prioridade da entrega atual na home; em `/dados`, reutilizar o mesmo módulo se houver acoplamento simples, depois do aviso metodológico e dos dados principais. SVG local estático com polígonos dos 246 municípios, **<30 KB**, sem biblioteca de mapas. A geometria é uma captura da [API de malhas municipais do IBGE](https://servicodados.ibge.gov.br/api/v3/malhas/estados/52?intrarregiao=municipio&formato=image%2Fsvg%2Bxml&qualidade=minima) em 28/10/2026; a resposta da API não declara vintage. O SVG preserva os códigos IBGE e foi simplificado pelo projeto (alteração da fonte) para caber no limite. A [nota técnica do IBGE sobre a Malha Municipal Digital](https://www.ibge.gov.br/biblioteca/visualizacao/livros/liv102268.pdf) permite redistribuição compatível com CC BY 4.0 com atribuição. A geometria é referência territorial, não delimitação legal. Fonte, data, licença e limite devem aparecer perto do mapa.
 
-**Contrato de interação:** seletor HTML é controle principal, sincronizado com os polígonos e o painel municipal. Todo município deve ser selecionável pelo mapa diretamente ou após ampliar uma região; oferecer zoom/ampliação e retorno acessíveis quando áreas pequenas não atingirem 48 × 48 px sem colisão. Provar em 360 px e zoom 200%. Não sobrepor alvos nem criar 246 paradas de Tab. O seletor GET/links SSR oferece os mesmos 246 municípios sem JavaScript. Ordem: seletor → resultado → link municipal; anunciar uma vez o nome selecionado, sem mover foco. Mapa tem título/descrição “Selecione um município”; tooltip/hover nunca contém informação exclusiva.
+**Contrato de interação:** seletor HTML é controle principal, sincronizado com os polígonos e o painel municipal. Todo município deve ser selecionável pelo mapa diretamente ou após ampliar uma região; oferecer zoom/ampliação e retorno acessíveis quando áreas pequenas não atingirem 48 × 48 px sem colisão. Provar em 360 px e zoom 200%. Não sobrepor alvos nem criar 246 paradas de Tab. O seletor GET/links SSR oferece os mesmos 246 municípios sem JavaScript. Na home, a ordem é seletor → registro → link de relatos → resumo municipal → mapa. A região de status anuncia o resumo da seleção e mantém o foco no controle usado. Mapa tem título/descrição “Selecione um município”; tooltip/hover nunca contém informação exclusiva.
 
-**Dados honestos:** polígonos neutros; seleção por contorno + nome textual, sem intensidade, ranking, ponto de endereço ou gravidade. Resultado mostra nome, “X relatos publicados na plataforma” e link `/municipios/[slug]`. Total publicado, cobertura operacional e disponibilidade são independentes: só mostrar “Nenhum relato publicado” após consulta bem-sucedida com zero; só “Ainda não acompanhamos este município” quando `ativo_acompanhamento === false`; falha mostra “Dados indisponíveis”, nunca zero. Carregando tem rótulo próprio. Não inferir cobertura pela contagem nem chamar agregado de verificado. Aviso metodológico, fonte, demonstração identificada e lista/tabela equivalente ficam próximos; não expor locais de relatos ou dados privados.
+**Dados honestos:** polígonos neutros; seleção por contorno + nome textual, sem intensidade, ranking, ponto de endereço ou gravidade. O resumo mostra nome e “X relatos publicados na plataforma”. Na home, o link de relatos conserva a seleção em `/problemas?municipio=<slug>`. Total publicado, cobertura operacional e disponibilidade são independentes: só mostrar “Nenhum relato publicado” após consulta bem-sucedida com zero; só “Ainda não acompanhamos este município” quando `ativo_acompanhamento === false`; falha mostra “Dados indisponíveis”, nunca zero. Carregando tem rótulo próprio. Não inferir cobertura pela contagem nem chamar agregado de verificado. Aviso metodológico, fonte, demonstração identificada e lista/tabela equivalente ficam próximos; não expor locais de relatos ou dados privados.
 
-**Responsividade:** celular: promessa, município e CTA antes do mapa de largura integral, resultado curto junto ao controle e visível após escolha. Desktop desde 768 px: ação e mapa lado a lado, proporções conforme espaço útil, painel adjacente sem cobrir polígonos. Testar nomes longos, teclado virtual, zoom, `scroll-margin-bottom` e safe-area para resultado/link nunca ficarem sob navegação fixa. Sem animação obrigatória. Se geometria <30 KB, seleção integral e alvos seguros não forem conciliáveis, registrar evidência e limite; contorno com lista sozinho não constitui entrega integral do mapa interativo.
+**Responsividade:** no celular, promessa, seletor, registro, link de relatos e resumo antecedem o mapa de largura integral, em uma página com rolagem natural. A partir de 1024 px, ações e resumo ficam à esquerda e o mapa, à direita, com Goiás inteiro no enquadramento inicial. Testar nomes longos, teclado virtual, zoom, `scroll-margin-bottom` e safe-area para resultado/link nunca ficarem sob navegação fixa. Sem animação obrigatória. Se geometria <30 KB, seleção integral e alvos seguros não forem conciliáveis, registrar evidência e limite; contorno com lista sozinho não constitui entrega integral do mapa interativo.
 
 ### Tom de voz
 
@@ -288,49 +288,17 @@ Hierarquia: navegação → retorno para lista → categoria e demonstração �
 
 ### `/` — home
 
-Hierarquia: promessa → escolha de município e ação → limite do serviço → mapa e resultado municipal → números e aviso → relatos recentes → três passos → links de confiança.
+No celular, a promessa “Goiás, visto de perto.” vem antes do seletor de município, de “Registrar um problema”, do link de relatos e do resumo municipal. O aviso “Não é canal oficial de atendimento” antecede o mapa. Números da plataforma, relatos recentes e “Como funciona” vêm depois. A partir de 1024 px, promessa, ações e resumo ficam à esquerda e o mapa à direita. O mapa inicia com Goiás inteiro e tem controles de zoom e reenquadramento.
 
-```text
-360 × 640
-┌──────────────────────────────────┐
-│ Observatório Goiás          ☰    │
-│                                  │
-│ RELATOS PÚBLICOS EM GOIÁS        │
-│ Veja o que precisa melhorar      │
-│ na sua cidade.                   │
-│ Registre um problema e acompanhe │
-│ as atualizações com um protocolo.│
-│ Qual é o seu município?          │
-│ [Digite o nome do município   ▾] │
-│ [Registrar um problema]          │
-│ Ver relatos por município        │
-│ Não é canal oficial de atendimento│
-│                                  │
-│ MAPA: selecione um município     │
-│ [polígonos + ampliar/reduzir]     │
-│ [resultado e link municipal]     │
-│ NÚMEROS DA PLATAFORMA            │
-│ 28 relatos · 6 municípios        │
-│ [Como ler estes números]         │
-│ Dados demonstrativos identificados│
-│                                  │
-│ Relatos recentes                 │
-│ [cartão compacto]                │
-│ [cartão compacto]                │
-│ Como funciona · 3 passos         │
-└──────────────────────────────────┘
-```
-
-Os valores `28` e `6` são exemplos e devem estar cobertos por “Dados de demonstração” em cada bloco; se não houver dados reais/demonstrativos carregados, esconder os números e mostrar estado vazio. **768/1280:** promessa, seletor e ação à esquerda; mapa e resumo municipal adjacente à direita, sem proporção fixa 7/5 e sem painel flutuante. Métricas com nota abaixo, relatos recentes com hierarquia variada e passos compactos depois. Ação secundária “Ver relatos deste município” acompanha a seleção. Preservar SSR, links atuais e aviso de canal não oficial.
-
-**Mapa interativo e componentes da home (implementado).**
-
-- **Seleção direta:** um toque ou clique em um polígono seleciona o município no mesmo gesto. Seletor, contorno do polígono, resumo e URL (`?municipio=<slug>#territorio`, navegação client-side) usam um único estado. Durante a navegação o resumo mostra “Carregando relatos de {município}…”; falha mostra indisponibilidade, nunca zero.
-- **Câmera independente:** zoom e pan não alteram a seleção, e selecionar não move a câmera. Controles “Ampliar mapa”, “Reduzir mapa” e “Mostrar Goiás inteiro” (48 px). Pan por arrasto com limiar de 8 px (arrasto nunca seleciona), pinça e roda do mouse com ponto focal; `touch-action: none` só no SVG, então a rolagem da página fora dele segue normal.
-- **Teclado:** o SVG é uma única parada de Tab; setas escolhem um candidato, Enter seleciona, Esc restaura o enquadramento sem limpar o município, `+`/`−` aproximam. O seletor continua sendo o caminho mais preciso.
-- **Sem JavaScript ou SVG indisponível:** o seletor GET com 246 municípios e a ação principal continuam funcionando; o mapa mostra aviso de indisponibilidade.
-- **Relatos recentes:** `CartaoProblema` variante `home` (ícone de categoria, demonstração, município, situação, data, resposta oficial se houver, botão “Ver relato”), em grade de 1 coluna (360), 2 (768) e 3 (1280). Sem resumo inventado e sem carrossel.
-- **Como funciona:** `PassosInicio`, três passos 01/02/03 ligados por linha fina, com cenas SVG locais esquemáticas que ilustram só controles existentes.
+- **Seleção:** um toque ou clique no polígono, o seletor e o teclado sincronizam o contorno, o seletor, a URL (`?municipio=<slug>#territorio`) e o resumo municipal. Após a escolha, “Registrar um problema” e “Ver relatos deste município” preservam o município no endereço. Sem seleção, “Ver relatos em Goiás” leva à lista geral.
+- **Mouse:** ao passar sobre um município, o mapa realça seu contorno e mostra o nome temporariamente. A seleção e o candidato de teclado têm prioridade visual no mesmo polígono. O realce temporário some ao sair do mapa, arrastar ou cancelar o gesto. O realce afeta apenas o contorno e o rótulo visual.
+- **Resumo:** a consulta em andamento, o total zero após consulta bem-sucedida, a falta de acompanhamento indicada pelo cadastro e a indisponibilidade têm mensagens próprias.
+- **Câmera e teclado:** “Ampliar mapa”, “Reduzir mapa” e “Mostrar Goiás inteiro” atuam na câmera. Há arrasto com limiar de 8 px, pinça e zoom com a roda do mouse. O SVG usa `touch-action: pan-y`, que permite a rolagem vertical da página. O SVG é uma única parada de Tab. As setas percorrem municípios, Enter seleciona, Esc restaura o enquadramento e `+`/`−` ajustam o zoom.
+- **Fallback:** o HTML inicial traz a malha estática e um formulário GET. O seletor e as ações funcionam sem JavaScript e continuam disponíveis se o mapa interativo falhar. Quando detecta a falha, a interface oferece o seletor na ajuda do mapa.
+- **Números da plataforma:** a home consulta os indicadores no servidor e coloca o aviso metodológico antes das contagens. O conteúdo demonstrativo recebe selo. Uma resposta sem indicadores mostra o estado vazio e uma contagem igual a zero retornada pelo servidor aparece normalmente.
+- **Relatos recentes:** a home consulta no servidor até cinco relatos públicos, em ordem de publicação mais recente. Os cartões empilham em uma coluna no celular, passam a duas a partir de 768 px e a três a partir de 1280 px. A variante `home` reúne categoria, selo de demonstração, título, município, situação, data e indicação de resposta oficial conforme os dados do relato. O título e “Ver relato” levam à ficha pública. Uma resposta sem relatos mostra o estado vazio.
+- **Falhas de dados:** a falha no agregado municipal fica no resumo e mantém as ações da home. Uma falha nas consultas iniciais aciona o estado de erro da rota com opção de tentar novamente.
+- **Como funciona:** `PassosInicio` apresenta três passos com cenas SVG locais dos controles usados no fluxo.
 
 ### `/problemas`
 
@@ -492,7 +460,7 @@ No acompanhamento autenticado pelo link privado, “Pedir exclusão do relato”
 
 | Tela | Ordem de foco/leitura | O que carrega primeiro |
 |---|---|---|
-| Home | Pular conteúdo → logo/início → navegação → H1/promessa → município → Registrar → outros links → indicadores/aviso → relatos → passos → rodapé. | HTML, título, seletor e CTA; números depois do texto introdutório. |
+| Home | Pular conteúdo → logo/início → navegação → H1/promessa → seletor → Registrar → link de relatos → resumo → mapa e ajuda → aviso metodológico e indicadores → relatos → passos → rodapé. | HTML, título, seletor e CTA; números depois do texto introdutório. |
 | Lista | Pular conteúdo → H1 → filtros Município/Categoria → Aplicar/Limpar → aviso e contagem → títulos de relato em ordem → próxima página. | Texto, filtros GET e primeira página da lista. |
 | Detalhe | Pular conteúdo → voltar → categoria/demonstração → H1/local → situação/verificação → resposta → descrição/fotos → histórico → afetados/nota → compartilhar/denunciar → método. | H1, situação, resposta e descrição; fotos abaixo da dobra lazy. |
 | Município | Breadcrumb → H1 → estado da cobertura → aviso/indicadores → filtros → lista/paginação. | Município e aviso de cobertura antes de contagens. |
@@ -536,9 +504,9 @@ Meta LCP <2,5 s em 4G; sem biblioteca JS de mapas na leitura; sem autoplay; sem 
 
 ### Home e listas
 
-- Home H1: “Veja o que precisa melhorar na sua cidade.”
-- Home apoio: “Registre um problema público e acompanhe as atualizações com um protocolo.”
-- Município: “Qual é o seu município?” / placeholder “Digite o nome do município”.
+- Home H1: “Goiás, visto de perto.”
+- Home apoio: “Encontre sua cidade, consulte relatos públicos e acompanhe as atualizações.”
+- Município: “Selecione um município” / opção inicial “Escolha seu município”.
 - Sem resultados: “Não encontramos relatos com esses filtros.” / “Tente escolher outro município ou categoria.”
 - Sem relatos: “Ainda não há relatos publicados aqui.”
 - Município sem acompanhamento: “Ainda não acompanhamos relatos neste município.” / “Isso não quer dizer que não existam problemas. Você pode registrar um relato e guardar o protocolo.”

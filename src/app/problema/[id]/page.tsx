@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -10,6 +11,9 @@ import { RespostaOficial } from "@/components/RespostaOficial";
 import { ContagemAfeta, ParticipacaoRelato } from "@/components/ParticipacaoRelato";
 import { participacaoProtegidaVercel } from "@/lib/registro/staging";
 import { obterProblema, urlImagem } from "@/lib/dados/consultas";
+import { z } from "zod";
+import { segredoAdmin } from "@/lib/modo/modo";
+import { modoAtual } from "@/lib/modo/servidor";
 import { formatarData } from "@/lib/formato";
 import { descricaoSituacao, temDocumentacaoResolucao } from "@/lib/situacao";
 import { resolucaoPublica, situacaoPublica, urlPublica } from "./publico";
@@ -22,7 +26,7 @@ export async function generateMetadata({ params }: PageProps<"/problema/[id]">):
   const dados = await obterProblema(id);
   if (!dados) return { title: "Relato não encontrado", description: "Relato não encontrado.", robots: { index: false, follow: false } };
   const p = dados.problema;
-  const description = `${process.env.VERCEL_ENV === "production" ? "" : "Dados de demonstração · "}${p.categoria_nome} em ${p.municipio_nome} — situação: ${situacaoPublica(dados)}`;
+  const description = `${p.gerado ? "Dado gerado (fictício) · " : ""}${p.categoria_nome} em ${p.municipio_nome} — situação: ${situacaoPublica(dados)}`;
   const url = urlPublica(p.id);
   return {
     title: p.titulo, description,
@@ -40,7 +44,19 @@ export default async function PaginaProblema(props: PageProps<"/problema/[id]">)
   // Antes de Suspense: ausência pública e inexistência seguem o mesmo notFound.
   const { id } = await props.params;
   const dados = await obterProblema(id);
+  if (dados) return <DetalheRelato dados={dados} />;
+  if (!z.uuid().safeParse(id).success || !segredoAdmin()) notFound();
+  return <Suspense fallback={null}><DetalheDemonstracao id={id} /></Suspense>;
+}
+
+async function DetalheDemonstracao({ id }: { id: string }) {
+  if (!(await modoAtual()).gerados) notFound();
+  const dados = await obterProblema(id, true);
   if (!dados) notFound();
+  return <DetalheRelato dados={dados} />;
+}
+
+function DetalheRelato({ dados }: { dados: NonNullable<Awaited<ReturnType<typeof obterProblema>>> }) {
   const { problema: p, imagens, atualizacoes, respostas } = dados;
   const resolucao = resolucaoPublica(dados);
   const documentacao = { justificativa: resolucao?.texto ?? null, evidencia: resolucao?.evidencia ?? null };
@@ -50,7 +66,7 @@ export default async function PaginaProblema(props: PageProps<"/problema/[id]">)
   const fotos = imagens.slice(0, 3).map(i => ({ id: i.id, descricao: i.descricao_publica, url: urlImagem(i.id) })).filter((f): f is { id: string; descricao: string; url: string } => f.url !== null);
   return <article className="mx-auto flex w-full min-w-0 max-w-[680px] flex-col gap-8 break-words">
     <header className="flex min-w-0 flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3"><p className="text-sm font-semibold">{p.categoria_nome}</p>{process.env.VERCEL_ENV !== "production" && <SeloDemonstracao />}</div>
+      <div className="flex flex-wrap items-center gap-3"><p className="text-sm font-semibold">{p.categoria_nome}</p>{p.gerado && <SeloDemonstracao />}</div>
       <h1>{p.titulo}</h1>
       <p><Link href={`/municipios/${encodeURIComponent(p.municipio_slug)}`} prefetch={false}>{p.municipio_nome}</Link></p>
       <dl className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-[auto_1fr]">
@@ -69,7 +85,7 @@ export default async function PaginaProblema(props: PageProps<"/problema/[id]">)
       {fotos.length ? <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">{fotos.map((f, i) => <li key={f.id}><figure><div className="relative aspect-[4/3] overflow-hidden rounded-lg border border-borda bg-superficie"><Image src={f.url} alt={f.descricao} fill sizes="(min-width: 640px) 328px, 100vw" loading="lazy" className="object-contain" /></div><figcaption className="mt-2 text-sm text-texto-suave">Foto {i + 1}. {f.descricao}</figcaption></figure></li>)}</ul> : <p className="text-texto-suave">Nenhuma foto publicada.</p>}
     </section>
     <section aria-labelledby="titulo-linha" className="flex flex-col gap-3"><h2 id="titulo-linha">Atualizações</h2><LinhaDoTempo itens={atualizacoes.map(a => ({ id: a.id, tipo: a.tipo, situacaoNova: a.situacao_nova, texto: a.texto, evidencia: a.evidencia, criadoEm: a.criado_em }))} /></section>
-    <section aria-labelledby="titulo-acoes" className="flex flex-col gap-3"><h2 id="titulo-acoes">Acompanhe este relato</h2>
+    {!p.gerado && <section aria-labelledby="titulo-acoes" className="flex flex-col gap-3"><h2 id="titulo-acoes">Acompanhe este relato</h2>
       {url ? <a className="inline-flex min-h-12 items-center justify-center rounded-lg bg-acao px-4 py-3 text-acao-texto" href={`https://wa.me/?text=${encodeURIComponent(url)}`} rel="noopener noreferrer">Compartilhar no WhatsApp</a> : <p>Compartilhamento indisponível enquanto o endereço público não estiver configurado.</p>}
       {participacaoProtegidaVercel() ? <ParticipacaoRelato key={p.id} id={p.id} afeta={process.env.AFETA_HABILITADO === "true"} totalInicial={p.confirmacoes_total} /> : <>
       <ContagemAfeta total={p.confirmacoes_total} />
@@ -77,7 +93,7 @@ export default async function PaginaProblema(props: PageProps<"/problema/[id]">)
       <button type="button" disabled aria-describedby="acoes-indisponiveis" className="min-h-12 rounded-lg border border-borda px-4">Sinalizar este relato — indisponível</button>
       <p id="acoes-indisponiveis" className="text-sm text-texto-suave">Estas ações aguardam implementação e definição das regras de privacidade.</p>
       </>}
-    </section>
+    </section>}
     <AvisoMetodologico />
   </article>;
 }

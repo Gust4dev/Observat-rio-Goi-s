@@ -47,8 +47,8 @@ describe("HeroInicio", () => {
     expect(render(vazio)).toContain("Registrar um problema");
   });
   it("(f) selo de demonstração só quando demonstracao", () => {
-    expect(render(vazio, { demonstracao: true })).toContain("Dados de demonstração");
-    expect(render(vazio)).not.toContain("Dados de demonstração");
+    expect(render(vazio, { demonstracao: true })).toContain("Dados gerados (fictícios)");
+    expect(render(vazio)).not.toContain("Dados gerados (fictícios)");
   });
   it("(g) não usa o mapa interativo", () => {
     expect(readFileSync("src/components/HeroInicio.tsx", "utf8")).not.toContain("MapaGoias");

@@ -11,7 +11,7 @@ let dados: Dados;
 beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://observatorio.example");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://teste.supabase.co");
-  dados = { problema: { id, protocolo: "GO-123", titulo: "Rua sem luz", descricao: "<script>alert(1)</script>", situacao: "resolvido", verificado: true, publicado_em: "2026-10-26T12:00:00Z", atualizado_em: "2026-10-27T12:00:00Z", municipio_id: 1, municipio_nome: "Goiânia", municipio_slug: "goiania", categoria_id: 1, categoria_nome: "Iluminação pública", categoria_slug: "iluminacao-publica", confirmacoes_total: 2, tem_resposta_oficial: false }, imagens: [], atualizacoes: [], respostas: [] };
+  dados = { problema: { id, protocolo: "GO-123", titulo: "Rua sem luz", descricao: "<script>alert(1)</script>", situacao: "resolvido", verificado: true, publicado_em: "2026-10-26T12:00:00Z", atualizado_em: "2026-10-27T12:00:00Z", municipio_id: 1, municipio_nome: "Goiânia", municipio_slug: "goiania", categoria_id: 1, categoria_nome: "Iluminação pública", categoria_slug: "iluminacao-publica", confirmacoes_total: 2, tem_resposta_oficial: false, gerado: false }, imagens: [], atualizacoes: [], respostas: [] };
   consulta.mockImplementation(async () => dados);
 });
 describe("detalhe público", () => {

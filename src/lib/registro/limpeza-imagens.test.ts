@@ -81,6 +81,6 @@ it("cron autorizado aplica a mesma limpeza e passa pelo proxy sem Basic",async()
  const request=new Request("https://teste/api/cron/limpar-quarentena",{headers:{authorization:"Bearer segredo-longo"}});
  expect((await GET(request)).status).toBe(200);expect(deletes).toHaveLength(2);
  vi.stubEnv("ACESSO_STAGING_USUARIO","u");vi.stubEnv("ACESSO_STAGING_SENHA","s");
- expect(proxy(new NextRequest(request)).headers.get("x-middleware-next")).toBe("1");
- expect(proxy(new NextRequest("https://teste/api/cron/outra")).status).toBe(401);
+ expect((await proxy(new NextRequest(request))).headers.get("x-middleware-next")).toBe("1");
+ expect((await proxy(new NextRequest("https://teste/api/cron/outra"))).status).toBe(401);
 });

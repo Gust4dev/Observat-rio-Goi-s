@@ -26,7 +26,7 @@ export async function assertNoSecretInPublicBundle(buildDir, markers) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const markers = [process.env.SUPABASE_SECRET_KEY, process.env.SUPABASE_SERVICE_ROLE_KEY];
+  const markers = [process.env.SUPABASE_SECRET_KEY, process.env.SUPABASE_SERVICE_ROLE_KEY, process.env.MODO_ADMIN_SEGREDO];
   try {
     await assertNoSecretInPublicBundle(path.resolve(process.env.NEXT_BUILD_DIR ?? '.next'), markers);
     console.log('ok public bundle excludes privileged key markers');

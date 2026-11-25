@@ -1,4 +1,5 @@
 import { obterExportacaoDados } from "@/lib/dados/consultas";
+import { modoAtual } from "@/lib/modo/servidor";
 import { exportarCSV, lerParametrosExportacao, LimiteExportacao } from "@/lib/dados/exportacao";
 
 export async function GET(request: Request) {
@@ -10,8 +11,10 @@ export async function GET(request: Request) {
   }
   const { formato, ...filtros } = parametros;
   try {
-    const itens = await obterExportacaoDados(filtros);
-    const headers = { "Cache-Control": "public, max-age=0, s-maxage=60, stale-while-revalidate=60", "X-Content-Type-Options": "nosniff" };
+    const { gerados } = await modoAtual();
+    const itens = await obterExportacaoDados(filtros, gerados);
+    // Com gerados a resposta depende do cookie: nunca em cache compartilhado.
+    const headers = { "Cache-Control": gerados ? "private, no-store" : "public, max-age=0, s-maxage=60, stale-while-revalidate=60", "X-Content-Type-Options": "nosniff", Vary: "Cookie" };
     return formato === "csv"
       ? new Response(exportarCSV(itens), { headers: { ...headers, "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="dados-observatorio.csv"' } })
       : Response.json({ dados: itens, total_linhas: itens.length }, { headers });
