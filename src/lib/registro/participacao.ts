@@ -43,14 +43,6 @@ async function preparar(request: Request, operacao: Operacao) {
   return { config, origem };
 }
 
-async function triar(titulo: string, descricao: string, origem: string, config: Config) {
-  // Sinais são consultivos: ambas as ações sempre seguem para revisão humana.
-  try {
-    await rpc("triagem_sinais", { p_titulo: titulo, p_descricao: descricao, p_origem_hash: bytea(origem), p_janela: `${config.triagem.janelaSegundos} seconds`, p_limite_origem: config.triagem.limiteOrigem },
-      z.array(z.object({ out_texto_repetido: z.boolean(), out_origem_sinalizada: z.boolean() })).length(1), config);
-  } catch { throw new ErroRegistro("indisponivel"); }
-}
-
 /** Allowlist fechada: este transporte não admite nomes nem endpoints vindos do cliente. */
 async function registrar(funcao: "registrar_denuncia" | "registrar_resposta", parametros: Record<string, unknown>, config: Config) {
   let resposta: Response;
@@ -82,7 +74,6 @@ export async function denunciar(request: Request) {
     const entrada = await entradaHttp(request, participacaoProtegidaVercel() ? denunciaSchema.partial({ turnstile: true }) : denunciaSchema);
     const { config, origem } = await preparar(request, "denunciar");
     if (config.captchaRegistroObrigatorio) await verificarTurnstile(entrada.turnstile!, config);
-    await triar(entrada.motivo, entrada.texto ?? "", origem, config);
     await registrar("registrar_denuncia", { p_ocorrencia_id: entrada.ocorrencia_id, p_motivo: entrada.motivo, p_texto: entrada.texto ?? null, p_origem_hash: bytea(origem) }, config);
     return concluir(respostaPrivada({ confirmacao: "Envio recebido para revisão." }, 202), logger, inicio);
   } catch (erro) { return concluir(falha(erro), logger, inicio); }
@@ -94,7 +85,6 @@ export async function responder(request: Request) {
     const entrada = await entradaHttp(request, participacaoProtegidaVercel() ? respostaSchema.partial({ turnstile: true }) : respostaSchema);
     const { config, origem } = await preparar(request, "resposta");
     if (config.captchaRegistroObrigatorio) await verificarTurnstile(entrada.turnstile!, config);
-    await triar(entrada.vinculo, entrada.texto, origem, config);
     // O RPC grava pendente; nenhum status ou decisão de publicação vem do navegador.
     await registrar("registrar_resposta", { p_ocorrencia_id: entrada.ocorrencia_id, p_vinculo: entrada.vinculo, p_contato: entrada.contato, p_texto: entrada.texto, p_origem_hash: bytea(origem) }, config);
     return concluir(respostaPrivada({ confirmacao: "Envio recebido para revisão." }, 202), logger, inicio);

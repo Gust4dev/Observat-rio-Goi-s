@@ -132,13 +132,12 @@ describe.each([{ nome: "denunciar", post: denunciar, entrada: denuncia, rpc: "re
     falha = ""; malformado = true; expect((await post(request(entrada))).status).toBe(503);
     vi.stubGlobal("fetch", async () => { throw new Error("segredo"); }); expect((await post(request(entrada))).status).toBe(503);
   });
-  it("consulta triagem antes da escrita e falha fechado se ela falhar", async () => {
-    const r = await post(request(entrada)); expect(r.status).toBe(202);
-    const triagem = chamadas.findIndex(c => c.url.endsWith("triagem_sinais"));
-    expect(triagem).toBeGreaterThan(-1); expect(triagem).toBeLessThan(chamadas.findIndex(c => c.url.endsWith(rpc)));
-    expect(chamadas[triagem].body).toMatchObject({ p_descricao: entrada.texto, p_origem_hash: expect.stringMatching(/^\\x[a-f0-9]{64}$/) });
-    expect(JSON.stringify(chamadas[triagem].body)).not.toContain("contato@teste.invalid");
-    chamadas = []; falha = "triagem_sinais"; expect((await post(request(entrada))).status).toBe(503); expect(chamadas.some(c => c.url.endsWith(rpc))).toBe(false);
+  it("não bloqueia participação em uma RPC consultiva sem efeito no fluxo", async () => {
+    falha = "triagem_sinais";
+    const r = await post(request(entrada));
+    expect(r.status).toBe(202);
+    expect(chamadas.some(c => c.url.endsWith(rpc))).toBe(true);
+    expect(chamadas.some(c => c.url.endsWith("triagem_sinais"))).toBe(false);
   });
   it("correlaciona respostas e logs sem aceitar ID hostil nem registrar dados privados", async () => {
     const req = request(entrada); req.headers.set("x-request-id", "contato@teste.invalid");
