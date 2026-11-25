@@ -56,30 +56,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it("retorna o mesmo total público no retry e invalida a tag somente após inserir", async () => {
+it("devolve o mesmo 202 ao inserir ou repetir sem consultar a view pública", async () => {
   confirmar.mockImplementationOnce(() => Response.json(true)).mockImplementationOnce(() => Response.json(false));
 
   const primeiro = await enviar();
   const retry = await enviar();
-  for (const resposta of [primeiro, retry]) {
-    expect(resposta.status).toBe(202);
-    expect(await resposta.json()).toEqual({ confirmacao, confirmacoes_total: 7 });
-  }
+  expect(primeiro.status).toBe(202);
+  expect(await primeiro.json()).toEqual({ confirmacao });
+  expect(retry.status).toBe(202);
+  expect(await retry.json()).toEqual({ confirmacao });
   expect(revalidateTag).toHaveBeenCalledExactlyOnceWith(`problema:${id}`, { expire: 0 });
-  expect(consulta).toHaveBeenCalledTimes(2);
-  for (const [url, init] of consulta.mock.calls) {
-    expect(url.searchParams.get("id")).toBe(`eq.${id}`);
-    expect(url.searchParams.get("select")).toBe("confirmacoes_total");
-    expect(init).toMatchObject({ method: "GET", cache: "no-store", headers: { apikey: "sb_publishable_test" } });
-  }
-});
-
-it("preserva o aceite e omite o total quando a leitura do agregado falha", async () => {
-  consulta.mockRejectedValueOnce(new Error("leitura indisponível"));
-  const resposta = await enviar();
-  expect(resposta.status).toBe(202);
-  expect(await resposta.json()).toEqual({ confirmacao });
-  expect(revalidateTag).toHaveBeenCalledExactlyOnceWith(`problema:${id}`, { expire: 0 });
+  expect(consulta).not.toHaveBeenCalled();
 });
 
 it.each([429, 409])("preserva o cache e dispensa a consulta do total após HTTP %s", async status => {

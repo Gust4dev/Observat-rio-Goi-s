@@ -3,6 +3,9 @@ import { POST as denunciar } from "../../app/api/denunciar/route";
 import { POST as responder } from "../../app/api/resposta/route";
 import { POST as afeta } from "../../app/api/afeta/route";
 
+const cache = vi.hoisted(() => ({ revalidateTag: vi.fn() }));
+vi.mock("next/cache", () => cache);
+
 const id = "7419b75e-86a9-4e4a-8a1a-9fb13f701a1e";
 const denuncia = { ocorrencia_id: id, motivo: "dado_pessoal", texto: "Documento pessoal visível no relato.", turnstile: "captcha-ficticio" };
 const resposta = { ocorrencia_id: id, vinculo: "Órgão fictício", contato: "contato@teste.invalid", texto: "Esta é uma resposta fictícia para revisão da equipe.", turnstile: "captcha-ficticio" };
@@ -12,10 +15,12 @@ function request(body: unknown, origin = "https://localhost") {
   return new Request("https://localhost/api/participacao", { method: "POST", headers: { origin, "content-type": "application/json" }, body: typeof body === "string" ? body : JSON.stringify(body) });
 }
 beforeEach(() => {
+  cache.revalidateTag.mockClear();
   chamadas = []; captcha = true; limite = true; retorno = true; falha = ""; malformado = false;
   vi.stubEnv("NODE_ENV", "test"); vi.stubEnv("VERCEL", ""); vi.stubEnv("VERCEL_ENV", "");
   vi.stubEnv("AMBIENTE_REGISTRO", "staging_ficticio"); vi.stubEnv("MODO_PUBLICACAO", "moderar_tudo");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://db.example"); vi.stubEnv("SUPABASE_SECRET_KEY", "sb_secret_test");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test");
   vi.stubEnv("TURNSTILE_SECRET", "captcha-segredo"); vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-ficticio"); vi.stubEnv("HMAC_SEGREDO", "h".repeat(32));
   for (const nome of ["LIMITE_FOTO_MAXIMO", "LIMITE_REGISTRO_MAXIMO", "LIMITE_ACOMPANHAR_MAXIMO", "LIMITE_EXCLUIR_MAXIMO", "LIMITE_JANELA_SEGUNDOS", "TRIAGEM_JANELA_SEGUNDOS", "TRIAGEM_LIMITE_ORIGEM", "LIMITE_DENUNCIA_MAXIMO", "LIMITE_RESPOSTA_MAXIMO"]) vi.stubEnv(nome, "5");
   vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
@@ -24,7 +29,9 @@ beforeEach(() => {
     if (url.includes("siteverify")) return Response.json({ success: captcha });
     if (url.endsWith("consumir_limite")) return Response.json(limite);
     if (url.endsWith("triagem_sinais")) return Response.json([{ out_texto_repetido: false, out_origem_sinalizada: false }]);
-    if (url.endsWith("registrar_denuncia") || url.endsWith("registrar_resposta")) return Response.json(malformado ? { contato: "privado" } : retorno);
+    if (["registrar_denuncia", "registrar_resposta", "registrar_confirmacao"].some(rpc => url.endsWith(rpc))) {
+      return Response.json(malformado ? { contato: "privado" } : retorno);
+    }
     throw new Error("RPC inesperado");
   });
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -182,4 +189,22 @@ it("usa uma chave de confirmação estável sem diferenciar repetição", async 
   expect((await afeta(request(corpo))).status).toBe(202);
   expect(chaves).toHaveLength(2);
   expect(chaves[0]).toBe(chaves[1]);
+  expect(cache.revalidateTag).not.toHaveBeenCalled();
+});
+
+it("expira somente o cache do relato após inserir a confirmação", async () => {
+  vi.stubEnv("AFETA_HABILITADO", "true");
+  vi.stubEnv("LIMITE_AFETA_MAXIMO", "5");
+  const respostaApi = await afeta(request({ ocorrencia_id: id, turnstile: "teste" }));
+  expect(respostaApi.status).toBe(202);
+  expect(cache.revalidateTag).toHaveBeenCalledExactlyOnceWith(`problema:${id}`, { expire: 0 });
+});
+
+it.each([429, 409])("preserva o cache quando a confirmação falha com HTTP %s", async status => {
+  vi.stubEnv("AFETA_HABILITADO", "true");
+  vi.stubEnv("LIMITE_AFETA_MAXIMO", "5");
+  if (status === 429) limite = false;
+  else falha = "registrar_confirmacao";
+  expect((await afeta(request({ ocorrencia_id: id, turnstile: "teste" }))).status).toBe(status);
+  expect(cache.revalidateTag).not.toHaveBeenCalled();
 });

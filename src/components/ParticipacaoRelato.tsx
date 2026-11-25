@@ -19,7 +19,6 @@ export function ParticipacaoRelato({ id, afeta, totalInicial }: { id: string; af
   const afetaConfirmado = useRef(false);
   const [ocupado, setOcupado] = useState(false);
   const [confirmado, setConfirmado] = useState(false);
-  const [totalConfirmado, setTotalConfirmado] = useState<number | null>(null);
   const [mensagem, setMensagem] = useState("");
 
   async function enviar(rota: "afeta" | "denunciar" | "resposta", dados: Record<string, unknown>) {
@@ -35,15 +34,13 @@ export function ParticipacaoRelato({ id, afeta, totalInicial }: { id: string; af
       });
       if (resposta.status === 202) {
         if (rota === "afeta") {
-          const corpo = await resposta.json().catch(() => null) as { confirmacoes_total?: unknown } | null;
-          const total = corpo?.confirmacoes_total;
-          if (typeof total !== "number" || !Number.isSafeInteger(total) || total < 0) {
-            setMensagem("Não foi possível confirmar o total atualizado. Você pode tentar novamente.");
+          const corpo = await resposta.json().catch(() => null) as { confirmacao?: unknown } | null;
+          if (typeof corpo?.confirmacao !== "string" || !corpo.confirmacao.trim()) {
+            setMensagem("Não foi possível confirmar o envio. Tente novamente com os mesmos dados.");
             return;
           }
           afetaConfirmado.current = true;
           setConfirmado(true);
-          setTotalConfirmado(total);
           setMensagem("Confirmação recebida.");
           router.refresh();
         } else {
@@ -70,7 +67,7 @@ export function ParticipacaoRelato({ id, afeta, totalInicial }: { id: string; af
   }
 
   return <>
-    <ContagemAfeta total={Math.max(totalInicial, totalConfirmado ?? totalInicial)} />
+    <ContagemAfeta total={totalInicial} />
     <div className="space-y-4 rounded-lg border border-borda p-4">
     {afeta && <button type="button" disabled={ocupado || confirmado} className="min-h-12 underline" onClick={() => void enviar("afeta", {})}>Também me afeta</button>}
     <details>
