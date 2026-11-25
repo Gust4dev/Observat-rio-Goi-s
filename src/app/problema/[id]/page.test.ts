@@ -2,7 +2,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { obterProblema } from "@/lib/dados/consultas";
 const consulta = vi.hoisted(() => vi.fn());
+const modoAtual = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/dados/consultas", async (importOriginal) => ({ ...await importOriginal<typeof import("@/lib/dados/consultas")>(), obterProblema: consulta }));
+vi.mock("@/lib/modo/servidor", () => ({ modoAtual }));
 import Pagina, { generateMetadata } from "./page";
 type Dados = NonNullable<Awaited<ReturnType<typeof obterProblema>>>;
 const id = "11111111-1111-4111-8111-111111111111";
@@ -11,6 +13,7 @@ let dados: Dados;
 beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://observatorio.example");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://teste.supabase.co");
+  modoAtual.mockResolvedValue({ gerados: false, alternavel: false });
   dados = { problema: { id, protocolo: "GO-123", titulo: "Rua sem luz", descricao: "<script>alert(1)</script>", situacao: "resolvido", verificado: true, publicado_em: "2026-10-26T12:00:00Z", atualizado_em: "2026-10-27T12:00:00Z", municipio_id: 1, municipio_nome: "Goiânia", municipio_slug: "goiania", categoria_id: 1, categoria_nome: "Iluminação pública", categoria_slug: "iluminacao-publica", confirmacoes_total: 2, tem_resposta_oficial: false, gerado: false }, imagens: [], atualizacoes: [], respostas: [] };
   consulta.mockImplementation(async () => dados);
 });
@@ -33,6 +36,17 @@ describe("detalhe público", () => {
     expect(meta.description).toContain("Resolução sem documentação");
     expect(meta.alternates?.canonical).toBe(`https://observatorio.example/problema/${id}`);
     expect(JSON.stringify(meta)).not.toContain("GO-123");
+  });
+  it("metadata usa o relato gerado quando a sessão de demonstração o habilita", async () => {
+    const gerado = { ...dados, problema: { ...dados.problema, titulo: "[GERADO] Semáforo apagado", gerado: true, protocolo: "GERADO-2611-0047" } };
+    modoAtual.mockResolvedValue({ gerados: true, alternavel: true });
+    consulta.mockImplementation(async (_id: string, incluirGerados = false) => incluirGerados ? gerado : null);
+
+    const meta = await generateMetadata(props);
+
+    expect(meta.title).toBe("[GERADO] Semáforo apagado");
+    expect(meta.description).toContain("Dado gerado (fictício)");
+    expect(consulta).toHaveBeenNthCalledWith(2, id, true);
   });
   it("não publica resposta sem data e mostra resolução apenas com justificativa e evidência", async () => {
     dados.respostas = [{ id: 1, ocorrencia_id: id, autor_vinculo: "Órgão pendente", texto: "Resposta pendente", publicada_em: null }];
@@ -69,6 +83,16 @@ it("gera PNG neutro 1200 por 630 para o relato público", async () => {
 it("imagem social usa a mesma ausência pública", async () => {
   consulta.mockResolvedValue(null);
   await expect(Imagem({ params: props.params })).rejects.toMatchObject({ digest: "NEXT_HTTP_ERROR_FALLBACK;404" });
+});
+it("imagem social inclui relato gerado apenas no modo de demonstração ativo", async () => {
+  const gerado = { ...dados, problema: { ...dados.problema, titulo: "[GERADO] Semáforo apagado", gerado: true } };
+  modoAtual.mockResolvedValue({ gerados: true, alternavel: true });
+  consulta.mockImplementation(async (_id: string, incluirGerados = false) => incluirGerados ? gerado : null);
+
+  const resposta = await Imagem({ params: props.params });
+
+  expect(resposta.headers.get("content-type")).toBe("image/png");
+  expect(consulta).toHaveBeenCalledWith(id, true);
 });
 it("fotos públicas usam somente o alt revisado e o UUID no caminho público", async () => {
   dados.imagens = [{ id, ocorrencia_id: id, ordem: 1, descricao_publica: "Buraco no pavimento, sem pessoas ou placas visíveis" }];

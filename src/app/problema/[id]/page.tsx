@@ -23,13 +23,16 @@ export function generateStaticParams() { return [{ id: "exemplo" }]; }
 
 export async function generateMetadata({ params }: PageProps<"/problema/[id]">): Promise<Metadata> {
   const { id } = await params;
-  const dados = await obterProblema(id);
+  const publico = await obterProblema(id);
+  const demonstracao = !publico && (await modoAtual()).gerados;
+  const dados = publico ?? (demonstracao ? await obterProblema(id, true) : null);
   if (!dados) return { title: "Relato não encontrado", description: "Relato não encontrado.", robots: { index: false, follow: false } };
   const p = dados.problema;
   const description = `${p.gerado ? "Dado gerado (fictício) · " : ""}${p.categoria_nome} em ${p.municipio_nome} — situação: ${situacaoPublica(dados)}`;
-  const url = urlPublica(p.id);
+  const url = p.gerado ? null : urlPublica(p.id);
   return {
     title: p.titulo, description,
+    ...(p.gerado ? { robots: { index: false, follow: false } } : {}),
     ...(url ? { alternates: { canonical: url } } : {}),
     openGraph: { type: "article", title: p.titulo, description, ...(url ? { url } : {}), siteName: "Observatório Goiás", locale: "pt_BR" },
     twitter: { card: "summary_large_image", title: p.titulo, description, images: [{ url: "/opengraph-image.png", alt: "Observatório Goiás" }] },
