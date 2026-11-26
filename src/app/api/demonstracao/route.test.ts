@@ -31,10 +31,21 @@ it("inicia pela credencial no corpo e limpa a URL sem devolver o segredo", async
   }
 });
 
-it("rejeita segredo fora do corpo, entrada incompleta e outra origem", async () => {
+it("volta para a home sem liberar demonstração quando o código está ausente ou inválido", async () => {
   for (const req of [
     requisicao({ acao: "entrar" }, {}, url + "?admin=" + segredo),
     requisicao({ acao: "entrar", segredo: "errado" }),
+  ]) {
+    const res = await POST(req);
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe("https://teste/");
+    expect(res.headers.getSetCookie()).toEqual([]);
+    expect(await res.text()).not.toContain(segredo);
+  }
+});
+
+it("rejeita origem inválida", async () => {
+  for (const req of [
     requisicao({ acao: "entrar", segredo }, { origin: "https://outro.teste" }),
     requisicao({ acao: "entrar", segredo }, { origin: "null" }),
     requisicao({ acao: "entrar", segredo }, { "sec-fetch-site": "cross-site" }),

@@ -82,3 +82,16 @@ O Vercel Challenge não foi desativado nem contornado. Nenhuma chave foi rotacio
 Uma nova observação read-only encontrou 50 abas simultâneas no browser IAB, distribuídas igualmente entre `/`, `/problemas`, `/municipios`, `/dados` e `GET /api/dados?municipio=goiania&categoria=infraestrutura`. O inventário mostrou o título esperado nas 50 rotas e nenhum título de Challenge; a aba de API inspecionada exibiu `{"dados":[],"total_linhas":0}`, coerente com a limpeza das fixtures. A CLI Vercel confirmou no deployment alvo 624 registros CDN entre 00:02:27 e 00:03:13 UTC, todos no ambiente Production, hostname esperado e `wafAction=allow`: 170 respostas HTTP 200 e 454 HTTP 304, sem 429 ou 5xx. Consulta executada: `npx --no-install vercel logs requests --deployment dpl_9TyRW7YU93g3CT4NGrzQXpqJS7F4 --since 10m --limit 1000 --json --scope mercurygestoria-9113s-projects`. Os caminhos registrados incluíram as cinco rotas da onda, além de assets e páginas auxiliares; os 624 registros não equivalem a 624 sessões nem medem latência. Uma tentativa de obter a amostra detalhada de todas as 40 abas excedeu o limite da ferramenta.
 
 Esta observação reforça somente o aceite de rajada: são abas de um único perfil/rede, sem repetição sustentada e sem usuários independentes. Não prova 50 sessões estáveis por 30 minutos nem substitui a jornada de detalhe com fixture. A lacuna de capacidade ponta a ponta permanece aberta.
+
+## Retirada da fixture de 25/11/2026
+
+O relato sintético do ensaio de Goiânia, protocolo `OG-26-26C869BB` e UUID `3ee3e5de-dace-40a4-af1a-bb1a8837b056`, foi confirmado pela interseção de UUID, protocolo e título no projeto Production. A leitura agregada encontrou **1 relato publicado, 1 token reservado, 1 confirmação e 0 eventos de moderação**. O link privado do titular não foi preservado.
+
+A retirada pelo titular exige o link original, pois o banco guarda apenas o hash do token. A remoção administrativa versionada exige sessão institucional de moderador ativo com AAL2, motivo cadastrado e versão corrente da ocorrência. Essa remoção tira o detalhe do catálogo público e registra auditoria. A ação não equivale à exclusão definitiva do titular, que apaga conteúdo e revoga o token. A limpeza permanece pendente de um desses caminhos autorizados.
+
+## Retirada administrativa da fixture de demonstração — 26/11/2026
+
+- O responsável concluiu o acesso de superadmin com MFA/AAL2 no painel Production. A fila em “Publicados recentes” confirmou o protocolo `OG-26-26C869BB`, título `[DEMO-MVP:20261125-001] Poste apagado em Goiânia` e UUID `3ee3e5de-dace-40a4-af1a-bb1a8837b056` antes da ação.
+- A ocorrência foi removida pelo fluxo normal do painel com motivo cadastrado `fora_escopo` e justificativa de que era relato sintético criado para validar o MVP. A interface confirmou “Moderação atualizada” e passou a mostrar “Moderação: removido”.
+- A aba de auditoria registrou a ação `remover` para o UUID exato em `2026-11-26T17:25:41.823842+00:00` (14:25:41 BRT), com ator administrativo e sem exclusão direta no banco. A leitura pública posterior do detalhe exibiu “Não há conteúdo público disponível neste endereço”.
+- Isso fecha a limpeza auditada desta fixture de ensaio. A ocorrência mantém seu tombstone/auditoria; a ação não foi apresentada como exclusão definitiva nem revogação do token do titular.

@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     const configurado = segredoAdmin();
     const enviado = campos.get("segredo");
     if (!configurado || !enviado || campos.getAll("segredo").length !== 1 || !compararSeguro(enviado, configurado)) {
-      return new NextResponse("Acesso indisponível.", { status: 403, headers });
+      return redirect();
     }
     const res = redirect();
     res.cookies.set(COOKIE_ADMIN, await tokenAdmin(configurado), opcoes);
