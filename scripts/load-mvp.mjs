@@ -24,28 +24,73 @@ function inteiro(valor, minimo, maximo) {
 
 export function configurar(env, { somenteLeitura = false } = {}) {
   const { MVP_TARGET: alvo, MVP_PROJECT_REF: ref, MVP_DEPLOYMENT_ID: deployment, MVP_DETAIL_ID: id,
-    MVP_MUNICIPIO: municipio, MVP_CATEGORIA: categoria, MVP_PUBLISHABLE_KEY: chave } = env;
+    MVP_MUNICIPIO: municipio, MVP_CATEGORIA: categoria, MVP_PUBLISHABLE_KEY: chave,
+    MVP_DEMO_ACCESS_CODE: codigo } = env;
   exigencia(alvo === TARGET && ref === REF, "alvo ou ref divergente");
   exigencia(/^dpl_[A-Za-z0-9]+$/.test(deployment ?? ""), "informe o ID do deployment aprovado no E2E");
+  exigencia(typeof codigo === "string" && codigo.trim().length >= 16, "código temporário da demonstração obrigatório");
   const rampa = inteiro(env.MVP_RAMP_MINUTES ?? "3", 1, 10);
   const soak = inteiro(env.MVP_SOAK_MINUTES ?? "30", 1, 60);
   if (somenteLeitura) {
-    exigencia((env.MVP_WRITE_COUNT ?? "0") === "0", "perfil GET-only não admite escritas");
+    exigencia((env.MVP_WRITE_COUNT ?? "0") === "0", "perfil somente leitura não admite escritas de dados");
     const municipioSomenteLeitura = env.MVP_MUNICIPIO ?? "goiania";
     const categoriaSomenteLeitura = env.MVP_CATEGORIA ?? "vias";
     exigencia(SLUG.test(municipioSomenteLeitura) && SLUG.test(categoriaSomenteLeitura), "filtro de leitura inválido");
     return { deployment, id: null, municipio: municipioSomenteLeitura, categoria: categoriaSomenteLeitura,
-      chave: null, rampa, soak, escritas: 0, somenteLeitura: true };
+      chave: null, codigo: codigo.trim(), cookie: null, rampa, soak, escritas: 0, somenteLeitura: true };
   }
   exigencia(UUID.test(id ?? "") && SLUG.test(municipio ?? "") && SLUG.test(categoria ?? ""), "fixture e filtros inválidos");
   exigencia(/^sb_publishable_[A-Za-z0-9_-]+$/.test(chave ?? ""), "a chave publishable do ref confirmado é obrigatória");
   return {
     deployment, id, municipio, categoria, chave,
+    codigo: codigo.trim(), cookie: null,
     rampa,
     soak,
     escritas: inteiro(env.MVP_WRITE_COUNT ?? "0", 0, 3),
     somenteLeitura: false,
   };
+}
+
+export function cookieDemonstracao(setCookies) {
+  const valores = new Map();
+  for (const header of setCookies) {
+    const [par = "", ...atributos] = header.split(";");
+    const separador = par.indexOf("=");
+    if (separador < 1) continue;
+    const nome = par.slice(0, separador).trim();
+    if (!["obs_admin", "obs_ficticios"].includes(nome)) continue;
+    const valor = par.slice(separador + 1).trim();
+    const attrs = atributos.map((atributo) => atributo.trim().toLowerCase());
+    exigencia(valor.length > 0 && attrs.includes("path=/") && attrs.includes("httponly")
+      && attrs.includes("secure") && attrs.includes("samesite=strict"), "cookie de demonstração sem atributos seguros");
+    valores.set(nome, `${nome}=${valor}`);
+  }
+  exigencia(valores.has("obs_admin") && valores.has("obs_ficticios"), "sessão temporária não recebida");
+  return `${valores.get("obs_admin")}; ${valores.get("obs_ficticios")}`;
+}
+
+export async function autenticarDemonstracao(codigo, fetchImpl = fetch) {
+  const resposta = await fetchImpl(`${TARGET}/api/demonstracao`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Origin: TARGET,
+      "Cache-Control": "no-store",
+    },
+    body: new URLSearchParams({ acao: "entrar", segredo: codigo }).toString(),
+    redirect: "manual",
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  const destino = resposta.headers.get("location");
+  exigencia(resposta.status === 303 && destino && new URL(destino, TARGET).origin === TARGET
+    && new URL(destino, TARGET).pathname === "/", "código de demonstração não aceito pelo runtime");
+  const getSetCookie = resposta.headers.getSetCookie;
+  let setCookies = typeof getSetCookie === "function" ? getSetCookie.call(resposta.headers) : [];
+  if (setCookies.length === 0) {
+    const combinado = resposta.headers.get("set-cookie") ?? "";
+    setCookies = combinado.split(/,\s*(?=obs_(?:admin|ficticios)=)/);
+  }
+  return cookieDemonstracao(setCookies);
 }
 
 export function caminhosCarga(config) {
@@ -92,14 +137,18 @@ export function resumir(amostras, segundos) {
     p50_ms: p(.50), p95_ms: p(.95), p99_ms: p(.99), contagens };
 }
 
-async function app(caminho, json) {
+async function app(config, caminho, json) {
   const inicio = performance.now();
   const escrita = json !== undefined;
   try {
     const resposta = await fetch(TARGET + caminho, {
       redirect: "manual",
       signal: AbortSignal.timeout(TIMEOUT_MS),
-      ...(escrita && { method: "POST", headers: { "Content-Type": "application/json", Origin: TARGET }, body: JSON.stringify(json) }),
+      headers: {
+        Cookie: config.cookie,
+        ...(escrita && { "Content-Type": "application/json", Origin: TARGET }),
+      },
+      ...(escrita && { method: "POST", body: JSON.stringify(json) }),
     });
     const corpo = await resposta.text();
     return { classe: classificar(resposta.status, resposta.headers.get("x-vercel-mitigated"), corpo, escrita),
@@ -133,7 +182,7 @@ async function registrar(config, runId, fixtures, medicao) {
   const token = randomBytes(32).toString("base64url");
   const fixture = { titulo, token, protocolo: null, id: null };
   fixtures.push(fixture);
-  const registro = await app("/api/registrar", {
+  const registro = await app(config, "/api/registrar", {
     municipio: config.municipio, categoria: config.categoria, titulo,
     descricao: "Registro sintético de ensaio de capacidade. Nenhum dado pessoal foi fornecido.",
     token_hash: createHash("sha256").update(token).digest("hex"),
@@ -145,7 +194,7 @@ async function registrar(config, runId, fixtures, medicao) {
   const linha = await consultarFixture(config, { protocolo: `eq.${fixture.protocolo}` });
   exigencia(linha?.titulo === titulo && UUID.test(linha.id), "fixture recém-criada não corresponde ao protocolo");
   fixture.id = linha.id;
-  const acompanhamento = await app("/api/acompanhar", { token });
+  const acompanhamento = await app(config, "/api/acompanhar", { token });
   const titular = parse(acompanhamento);
   if (acompanhamento.classe === "ok" && !acompanharCompat(acompanhamento, titular, linha, fixture)) {
     acompanhamento.classe = "identidade_divergente";
@@ -159,14 +208,14 @@ async function limpar(config, fixtures) {
   for (const fixture of fixtures) {
     try {
       // O titular precisa provar a identidade exata antes de acionar a retirada.
-      const acompanhar = await app("/api/acompanhar", { token: fixture.token });
+      const acompanhar = await app(config, "/api/acompanhar", { token: fixture.token });
       const titular = parse(acompanhar);
       const linha = await consultarFixture(config, { titulo: `eq.${fixture.titulo}` });
       if (!linha && !fixture.protocolo && acompanhar.status === 404) continue;
       exigencia(linha && acompanharCompat(acompanhar, titular, linha, fixture), "identidade da fixture não comprovada");
       fixture.id = linha.id;
       fixture.protocolo = linha.protocolo;
-      const excluir = await app("/api/excluir", { token: fixture.token, confirmacao: true });
+      const excluir = await app(config, "/api/excluir", { token: fixture.token, confirmacao: true });
       exigencia(excluir.classe === "ok" && !await consultarFixture(config, { id: `eq.${linha.id}` }), "retirada não comprovada");
     } catch {
       pendentes.push({ id: fixture.id, protocolo: fixture.protocolo });
@@ -191,7 +240,8 @@ function analisarAmostras(amostras, segundos) {
 
 async function executar(config) {
   confirmarDeployment(inspecionar(), config.deployment);
-  const saude = await app("/api/saude");
+  config.cookie = await autenticarDemonstracao(config.codigo);
+  const saude = await app(config, "/api/saude");
   const estado = parse(saude);
   exigencia(saude.classe === "ok" && estado?.banco === "ok" && estado?.origem_confirmada === true,
     `preflight de runtime falhou (${saude.classe}); nenhuma carga disparada`);
@@ -201,7 +251,7 @@ async function executar(config) {
     exigencia(detalhe && /^\[DEMO-MVP[:\]]/.test(detalhe.titulo) && detalhe.municipio_slug === config.municipio
       && detalhe.categoria_slug === config.categoria, "fixture de leitura não confere no ref aprovado");
   }
-  for (const caminho of caminhos) exigencia((await app(caminho)).classe === "ok", "uma rota de leitura falhou no preflight");
+  for (const caminho of caminhos) exigencia((await app(config, caminho)).classe === "ok", "uma rota de leitura falhou no preflight");
   const runId = randomUUID();
   const fixtures = [];
   const fases = [];
@@ -230,7 +280,7 @@ async function executar(config) {
         let i = posicao;
         while (!encerrando && performance.now() < fim) {
           const rota = caminhos[i++ % caminhos.length];
-          const resultado = await app(rota);
+          const resultado = await app(config, rota);
           amostras.push(amostra(rota.split("?")[0].replace(config.id, ":id"), resultado));
           if (["5xx", "timeout", "infra", "status_inesperado"].includes(resultado.classe)) negativas++;
           if (resultado.classe === "challenge" || resultado.classe === "limite" ||
@@ -249,7 +299,7 @@ async function executar(config) {
     const pendentes = config.somenteLeitura ? [] : await limpar(config, fixtures);
     process.removeListener("SIGINT", parar);
     process.removeListener("SIGTERM", parar);
-    console.log(JSON.stringify({ perfil: config.somenteLeitura ? "GET-only" : "misto", run_id: runId, deployment: config.deployment, fases, falha,
+    console.log(JSON.stringify({ perfil: config.somenteLeitura ? "somente-leitura" : "misto", run_id: runId, deployment: config.deployment, fases, falha,
       cadastros_tentados: fixtures.length, limpeza_pendente: pendentes }, null, 2));
     if (encerrando || pendentes.length) process.exitCode = 1;
   }
@@ -258,7 +308,7 @@ async function executar(config) {
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   try {
     exigencia(process.argv.length === 3 && ["--execute", "--execute-read-only"].includes(process.argv[2]),
-      "use --execute-read-only para carga GET-only; --execute exige fixture e pré-aprovação da janela");
+      "use --execute-read-only para leitura sem escrita de dados; --execute exige fixture e pré-aprovação da janela");
     const somenteLeitura = process.argv[2] === "--execute-read-only";
     await executar(configurar(process.env, { somenteLeitura }));
   } catch (erro) {

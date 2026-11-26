@@ -12,6 +12,7 @@ Configure o processo que vai executar o script.
 | `MVP_DETAIL_ID` | UUID exato da fixture pública de leitura |
 | `MVP_MUNICIPIO`, `MVP_CATEGORIA` | Slugs reais correspondentes à fixture |
 | `MVP_PUBLISHABLE_KEY` | Chave publishable do Supabase Production, disponível no processo e omitida do relatório |
+| `MVP_DEMO_ACCESS_CODE` | Código compartilhado de demonstração, fornecido apenas ao processo; não registrar nem incluir no relatório |
 | `MVP_RAMP_MINUTES` | Minutos em 20 e 40 sessões, padrão 3 |
 | `MVP_SOAK_MINUTES` | Minutos em cada patamar de 50 e 60 sessões, padrão 30 |
 | `MVP_WRITE_COUNT` | Número de cadastros sintéticos durante o patamar 60, padrão 0 e máximo 3 |
@@ -22,13 +23,13 @@ Rode uma vez por janela de hora e verifique o saldo do limite de 10 cadastros/ho
 node scripts/load-mvp.mjs --execute
 ```
 
-Para medir somente navegação pública sem depender de relato ativo nem criar fixtures, use o perfil estritamente GET-only:
+Para medir navegação pública sem criar ou alterar dados, use o perfil somente leitura:
 
 ```powershell
 node scripts/load-mvp.mjs --execute-read-only
 ```
 
-Esse perfil requer apenas `MVP_TARGET`, `MVP_PROJECT_REF`, `MVP_DEPLOYMENT_ID` e os limites de duração; usa `goiania`/`vias` como filtro limitado por padrão, substituíveis por `MVP_MUNICIPIO` e `MVP_CATEGORIA`. Ele percorre home, lista, municípios, detalhe municipal, dados e exportação filtrada; não consulta o PostgREST diretamente, não envia POST e não precisa de chave ou token. Se o runtime responder com Challenge, o runner encerra antes da rampa; não tente contornar a proteção. O perfil mede navegação no alias, mas não substitui as jornadas de cadastro, acompanhamento, participação ou moderação.
+Esse perfil requer `MVP_TARGET`, `MVP_PROJECT_REF`, `MVP_DEPLOYMENT_ID`, `MVP_DEMO_ACCESS_CODE` e os limites de duração; usa `goiania`/`vias` como filtro limitado por padrão, substituíveis por `MVP_MUNICIPIO` e `MVP_CATEGORIA`. Antes da rampa, faz um único `POST /api/demonstracao` para obter o cookie de acesso; não segue redirects, não imprime o código nem o cookie, e mantém ambos somente em memória. As sessões virtuais compartilham esse cookie stateless. Durante a medição, percorre home, lista, municípios, detalhe municipal, dados e exportação filtrada, sem criar ou alterar dados de negócio e sem consultar PostgREST diretamente. Se o runtime responder com Challenge, o runner encerra antes da rampa; não tente contornar a proteção. O perfil mede navegação no alias, mas não substitui as jornadas de cadastro, acompanhamento, participação ou moderação.
 
 O cliente mantém até uma requisição em andamento por sessão e alterna entre home, lista, detalhe, página municipal e exportação filtrada. O relatório JSON registra o deployment, o ID da execução, vazão, p50/p95/p99 e contagens por classe e rota. Challenge e 429 interrompem a campanha sem reduzir as proteções. O relatório também acusa abortos por erro acumulado e eventual fixture cujo desaparecimento não pôde ser comprovado. Nesse caso, confira o ID/protocolo exato pelo console; mantenha a auditoria. O script evita seguir redirecionamentos.
 
@@ -223,3 +224,17 @@ O runner retirou seis relatos com seis eventos de auditoria, encerrou e retirou 
 - O Brave fez rampa com cinco e vinte navegações, seguida de cinco ondas de 50 chamadas concorrentes ao controle do navegador, distribuídas entre início, relatos, municípios, Goiânia, dados e API de dados filtrada (`goiania`/`vias`). Foram 275 navegações confirmadas na URL e no título previstos em 75,3 s (00:07:44–00:08:59 BRT), sem Challenge visível. As ondas de 50 começaram entre 00:08:08 e 00:08:55 BRT. O navegador compartilhou perfil, rede e cache entre as abas.
 - A Vercel retornou 3.371 registros no mesmo deployment e host entre `03:07:44Z` e `03:09:00Z`, incluindo assets e prefetch. Todos foram GET e `wafAction=allow`: 250 respostas HTTP 200, 3.121 HTTP 304, zero 429 ou 5xx. A paginação informou `hasMore=false` e zero intervalos excluídos. A CLI não expôs duração por requisição. Para as cinco ondas de 50, a duração do lote no instrumento incluiu controle e conferência do inventário das abas, com p50 4.311 ms e p95/p99 5.004 ms (n=5, mesma amostra máxima nos dois percentis). Esses números não são percentis de latência HTTP por navegação ou rota.
 - A extensão do ensaio excedeu o limite do instrumento e derrubou a sessão de automação. O reinício não enumerou nenhum navegador controlável, portanto as ondas sem retorno ficaram fora da amostra e o fechamento das abas temporárias não pôde ser verificado. A campanha comprova cinco rajadas de leitura na versão publicada e não comprova 30 minutos com 50 clientes independentes nem escrita mista. Nenhuma fixture, POST ou alteração de WAF foi realizada.
+
+### Janela de telemetria de Production após a última publicação — 25/11/2026
+
+- O alias `observatorio-go.vercel.app` apontou para o deployment Production `dpl_BpmTqQY2PaU8UfPQwUF9vfwnAWGQ`, `READY`, SHA `14d0bc411c4c77764992d9902270fcb353da7b6e`, por `vercel inspect` e `vercel ls`. O runner `scripts/load-mvp.mjs --execute-read-only` usa seis rotas existentes e exige `/api/saude` com origem confirmada antes da rampa. Seu perfil padrão roda 20, 40, 50 e 60 sessões e não oferece seleção exclusiva do patamar de 50.
+- Uma única leitura HTTP direta em `/api/saude` às 00:31:46 BRT retornou 429 com `x-vercel-mitigated: challenge` e a página Vercel Security Checkpoint em 113 ms. A medição é do desafio e não da aplicação. O WAF encerrou a tentativa antes da rampa. O ensaio anterior de cinco rajadas no navegador já cobre esse caminho de leitura sem bypass e não foi repetido.
+- Como evidência independente, consultei o registro de requisições da Vercel no intervalo `03:02:00Z`–`03:32:00Z`, restrito ao deployment. A resposta incluiu 204 registros em todos os hosts, sem paginação pendente ou intervalos excluídos. No alias público, houve 141 GETs: 90 HTTP 200, 50 HTTP 304 e um HTTP 429 em `/api/saude`, com `wafAction=challenge`; zero 5xx entre os GETs. O total inclui recursos e navegação natural. A CLI não fornece latência de servidor nesses registros, portanto não é possível calcular p50/p95/p99. A janela não comprova concorrência nem um soak de 50 sessões. Esta retomada fez apenas a leitura HTTP direta e consultas à CLI, sem POST ou fixtures.
+
+### Retomada — sessão de demonstração e preflight Production — 26/11/2026
+
+- O alias `observatorio-go.vercel.app` apontou para o deployment Production `dpl_2tZb9yKb1odB7NW17xkkAF9yBG8s`, `READY`, no projeto `observatorio-go` confirmado pela CLI Vercel autenticada.
+- Na sessão real do navegador que já tinha o código de demonstração, `GET /api/saude` retornou HTTP 200 com `aplicacao=ok`, `banco=ok` e `origem_confirmada=true`. A página `/registrar` carregou a etapa 1 de 4 e as condições de publicação; não preenchi nem enviei relato. `/dados` carregou 1.620 relatos identificados como fictícios. Nenhum write, fixture ou alteração de configuração foi feito.
+- `scripts/load-mvp.mjs` agora aceita `MVP_DEMO_ACCESS_CODE`, obtém a sessão temporária com um POST de entrada, valida o redirecionamento e os cookies `HttpOnly`, `Secure` e `SameSite=Strict`, mantendo código e cookies em memória. O perfil de navegação não grava dados de negócio. A documentação foi alinhada para dizer isso explicitamente.
+- A tentativa de usar o runner Node direto não chegou ao app: a Vercel registrou três POSTs em `/api/demonstracao`, todos `HTTP 429` com `wafAction=challenge` e agente `node`, entre 20:48Z e 20:49Z. Isso não valida nem invalida o código nem o runtime da rota; o WAF interrompeu o tráfego antes da aplicação. Não contornei a proteção e não iniciei carga.
+- A suíte direcionada de `scripts/load-mvp.test.mjs` passou (10 testes). ESLint direcionado passou. O soak de 50 sessões por 30 minutos no alias continua pendente; a evidência de 50 sessões no staging e a navegação em navegador de 50 abas não substituem o perfil exigido pelo Plano 17.

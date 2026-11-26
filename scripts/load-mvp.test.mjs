@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { acompanharCompat, caminhosCarga, classificar, configurar, confirmarDeployment, resumir } from "./load-mvp.mjs";
+import { acompanharCompat, caminhosCarga, classificar, configurar, confirmarDeployment, cookieDemonstracao, autenticarDemonstracao, resumir } from "./load-mvp.mjs";
 
 const env = {
   MVP_TARGET: "https://observatorio-go.vercel.app",
@@ -10,6 +10,7 @@ const env = {
   MVP_MUNICIPIO: "goiania",
   MVP_CATEGORIA: "vias",
   MVP_PUBLISHABLE_KEY: "sb_publishable_just_a_test",
+  MVP_DEMO_ACCESS_CODE: "codigo-sintetico-de-teste",
 };
 
 test("limita o ensaio ao alias e ref autorizados, com zero escritas por padrão", () => {
@@ -30,6 +31,7 @@ test("perfil GET-only exige deployment aprovado e não depende de fixture, filtr
     MVP_TARGET: env.MVP_TARGET,
     MVP_PROJECT_REF: env.MVP_PROJECT_REF,
     MVP_DEPLOYMENT_ID: env.MVP_DEPLOYMENT_ID,
+    MVP_DEMO_ACCESS_CODE: env.MVP_DEMO_ACCESS_CODE,
     MVP_SOAK_MINUTES: "1",
   }, { somenteLeitura: true });
   assert.equal(readOnly.somenteLeitura, true);
@@ -46,6 +48,49 @@ test("perfil GET-only exige deployment aprovado e não depende de fixture, filtr
   }, { somenteLeitura: true }));
   assert.throws(() => confirmarDeployment({ id: "dpl_other", name: "observatorio-go", target: "production",
     readyState: "READY", aliases: ["observatorio-go.vercel.app"] }, readOnly.deployment));
+});
+
+test("perfil de carga exige código temporário sem incluir o valor no relatório", () => {
+  const readOnly = configurar({
+    MVP_TARGET: env.MVP_TARGET,
+    MVP_PROJECT_REF: env.MVP_PROJECT_REF,
+    MVP_DEPLOYMENT_ID: env.MVP_DEPLOYMENT_ID,
+    MVP_DEMO_ACCESS_CODE: env.MVP_DEMO_ACCESS_CODE,
+  }, { somenteLeitura: true });
+  assert.equal(readOnly.codigo, env.MVP_DEMO_ACCESS_CODE);
+  assert.throws(() => configurar({
+    MVP_TARGET: env.MVP_TARGET, MVP_PROJECT_REF: env.MVP_PROJECT_REF,
+    MVP_DEPLOYMENT_ID: env.MVP_DEPLOYMENT_ID,
+  }, { somenteLeitura: true }));
+});
+
+test("preserva somente os cookies da sessão demo e ignora atributos", () => {
+  assert.equal(cookieDemonstracao([
+    "obs_admin=abc123; Path=/; HttpOnly; Secure; SameSite=Strict",
+    "obs_ficticios=1; Path=/; HttpOnly; Secure; SameSite=Strict",
+    "unrelated=ignored; Path=/",
+  ]), "obs_admin=abc123; obs_ficticios=1");
+  assert.throws(() => cookieDemonstracao(["obs_admin=abc123; Path=/"]));
+});
+
+test("autentica a carga pelo formulário de demonstração sem seguir redirecionamento", async () => {
+  let requisicao;
+  const cookie = await autenticarDemonstracao(env.MVP_DEMO_ACCESS_CODE, async (url, options) => {
+    requisicao = { url, options };
+    return {
+      status: 303,
+      headers: {
+        get: nome => nome.toLowerCase() === "location" ? "/" : null,
+        getSetCookie: () => ["obs_admin=abc123; Path=/; HttpOnly; Secure; SameSite=Strict",
+          "obs_ficticios=1; Path=/; HttpOnly; Secure; SameSite=Strict"],
+      },
+    };
+  });
+  assert.equal(cookie, "obs_admin=abc123; obs_ficticios=1");
+  assert.equal(requisicao.url, "https://observatorio-go.vercel.app/api/demonstracao");
+  assert.equal(requisicao.options.redirect, "manual");
+  assert.equal(requisicao.options.headers.Origin, "https://observatorio-go.vercel.app");
+  assert.equal(requisicao.options.body, new URLSearchParams({ acao: "entrar", segredo: env.MVP_DEMO_ACCESS_CODE }).toString());
 });
 
 test("perfil misto mantém a fixture e a consulta pública filtrada", () => {
