@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { adminValido, COOKIE_ADMIN, segredoAdmin } from "@/lib/modo/modo";
 const NOINDEX = "noindex, nofollow";
 
 function comparar(a: string, b: string): boolean {
@@ -41,29 +42,56 @@ function credenciaisDe(request: NextRequest): [string, string] | null {
 }
 
 export async function proxy(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
   // Vercel Cron sends Bearer CRON_SECRET; this exact handler verifies it itself.
-  if (request.nextUrl.pathname === "/api/cron/limpar-quarentena") return prosseguir();
-  // A proteção global é exclusiva do Preview; as rotas mantêm seus próprios gates.
-  if (process.env.VERCEL_ENV !== "preview") return prosseguir();
-  const usuario = process.env.ACESSO_STAGING_USUARIO;
-  const senha = process.env.ACESSO_STAGING_SENHA;
+  if (pathname === "/api/cron/limpar-quarentena") return prosseguir();
 
-  if (!usuario || !senha) {
-    // Preview sem credenciais configuradas falha fechado.
-    return responder(503);
+  if (process.env.VERCEL_ENV === "preview") {
+    const usuario = process.env.ACESSO_STAGING_USUARIO;
+    const senha = process.env.ACESSO_STAGING_SENHA;
+
+    if (!usuario || !senha) {
+      // Preview sem credenciais configuradas falha fechado.
+      return responder(503);
+    }
+
+    const dadas = credenciaisDe(request);
+    // Avalia as duas comparações sempre, sem curto-circuito.
+    const okU = comparar(dadas?.[0] ?? "", usuario);
+    const okS = comparar(dadas?.[1] ?? "", senha);
+    if (!dadas || !(okU && okS)) {
+      return responder(401, {
+        "WWW-Authenticate": 'Basic realm="Ambiente de teste", charset="UTF-8"',
+      });
+    }
+    return prosseguir();
   }
 
-  const dadas = credenciaisDe(request);
-  // Avalia as duas comparações sempre, sem curto-circuito.
-  const okU = comparar(dadas?.[0] ?? "", usuario);
-  const okS = comparar(dadas?.[1] ?? "", senha);
-  if (!dadas || !(okU && okS)) {
-    return responder(401, {
-      "WWW-Authenticate": 'Basic realm="Ambiente de teste", charset="UTF-8"',
+  // O código temporário só fecha Production enquanto o segredo de demonstração existir.
+  if (process.env.VERCEL_ENV !== "production" || !segredoAdmin()) return prosseguir();
+
+  // A tela de entrada valida o segredo; o cron autentica seu próprio Bearer.
+  if (pathname === "/demonstracao" || pathname === "/api/demonstracao") return prosseguir();
+
+  if (await adminValido(request.cookies.get(COOKIE_ADMIN)?.value)) return prosseguir();
+
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json({ error: { code: "demo_required" } }, {
+      status: 401,
+      headers: { "Cache-Control": "no-store", "X-Robots-Tag": NOINDEX },
     });
   }
 
-  return prosseguir();
+  if (pathname === "/") {
+    return NextResponse.rewrite(new URL("/demonstracao", request.url), {
+      headers: { "X-Robots-Tag": NOINDEX },
+    });
+  }
+
+  return NextResponse.redirect(new URL("/", request.url), {
+    status: 307,
+    headers: { "X-Robots-Tag": NOINDEX },
+  });
 }
 
 export const config = {

@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { COOKIE_ADMIN, tokenAdmin } from "@/lib/modo/modo";
 import { proxy } from "./proxy";
 
 const basic = `Basic ${Buffer.from("usuario:senha").toString("base64")}`;
@@ -11,6 +12,7 @@ beforeEach(() => {
   vi.stubEnv("VERCEL_ENV", "preview");
   vi.stubEnv("ACESSO_STAGING_USUARIO", "usuario");
   vi.stubEnv("ACESSO_STAGING_SENHA", "senha");
+  vi.stubEnv("MODO_ADMIN_SEGREDO", "");
 });
 
 describe("proteção do ambiente Preview", () => {
@@ -86,8 +88,60 @@ it("ignora parâmetros legados de ativação, alteração e saída do modo demon
   vi.stubEnv("MODO_ADMIN_SEGREDO", segredo);
   for (const query of [`admin=${segredo}`, "ficticios=1", "admin=sair"]) {
     const res = await proxy(new NextRequest(`https://teste/?${query}`));
-    expect(res.headers.get("x-middleware-next")).toBe("1");
+    expect(res.headers.get("x-middleware-rewrite")).toBe("https://teste/demonstracao");
     expect(res.headers.getSetCookie()).toEqual([]);
     expect(res.headers.get("location")).toBeNull();
   }
+});
+
+describe("acesso temporário de demonstração em Production", () => {
+  const segredo = "codigo-temporario-de-demonstracao";
+
+  beforeEach(() => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("MODO_ADMIN_SEGREDO", segredo);
+  });
+
+  it("serve o formulário na home sem cookie de demonstração válido", async () => {
+    const response = await proxy(new NextRequest("https://teste/"));
+    expect(response.headers.get("x-middleware-rewrite")).toBe("https://teste/demonstracao");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+  });
+
+  it("redireciona páginas protegidas à home sem cookie válido", async () => {
+    const response = await proxy(new NextRequest("https://teste/problemas"));
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://teste/");
+  });
+
+  it("nega APIs Next com JSON quando não existe sessão de demonstração", async () => {
+    const response = await proxy(new NextRequest("https://teste/api/dados"));
+    expect(response.status).toBe(401);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    await expect(response.json()).resolves.toMatchObject({error:{code:"demo_required"}});
+  });
+
+  it("aceita apenas o cookie assinado pelo código configurado", async () => {
+    const cookie = await tokenAdmin(segredo);
+    const response = await proxy(new NextRequest("https://teste/api/dados", {
+      headers: {cookie:`${COOKIE_ADMIN}=${cookie}`},
+    }));
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("recusa cookie de demonstração adulterado", async () => {
+    const response = await proxy(new NextRequest("https://teste/problemas", {
+      headers: {cookie:`${COOKIE_ADMIN}=assinatura-invalida`},
+    }));
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://teste/");
+  });
+
+  it.each(["/demonstracao", "/api/demonstracao", "/api/cron/limpar-quarentena"])(
+    "mantém a exceção estreita necessária em %s",
+    async (path) => {
+      const response = await proxy(new NextRequest(`https://teste${path}`));
+      expect(response.headers.get("x-middleware-next")).toBe("1");
+    },
+  );
 });
