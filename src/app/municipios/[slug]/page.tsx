@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { AvisoMetodologico } from "@/components/AvisoMetodologico";
 import { CarregandoLista, ListaProblemas } from "@/components/ListaProblemas";
 import { obterMunicipio } from "@/lib/dados/consultas";
+import { modoAtual } from "@/lib/modo/servidor";
 import { TextoPainelMunicipio } from "@/components/TextoPainelMunicipio";
 
 // Valor de exemplo só para o Next validar a rota em tempo de build; slugs reais são
@@ -34,26 +35,52 @@ export default async function PaginaMunicipio(props: PageProps<"/municipios/[slu
   const m = await obterMunicipio(slug);
   if (!m) notFound();
 
-  if (!m.ativo_acompanhamento) return (
-    <div className="flex min-w-0 flex-col gap-5"><header><h1>{m.nome}</h1></header><p>Ainda não acompanhamos relatos neste município</p><p className="text-texto-suave">Isso não significa ausência de problemas. Não há prazo de início de acompanhamento definido.</p><Link href={`/registrar?municipio=${m.slug}`} prefetch={false} className={CLASSE_CTA_REGISTRO}>Registrar um problema</Link></div>
-  );
   return (
     <div className="flex flex-col gap-5">
       <header>
         <h1>{m.nome}</h1>
         <Suspense fallback={null}><TextoPainelMunicipio slug={m.slug} /></Suspense>
       </header>
+      <Suspense fallback={<CarregandoLista />}>
+        <ConteudoMunicipio municipio={m} searchParams={props.searchParams} />
+      </Suspense>
+    </div>
+  );
+}
+
+async function ConteudoMunicipio({
+  municipio,
+  searchParams,
+}: {
+  municipio: NonNullable<Awaited<ReturnType<typeof obterMunicipio>>>;
+  searchParams: PageProps<"/municipios/[slug]">["searchParams"];
+}) {
+  const modo = await modoAtual();
+  const m = modo.gerados ? await obterMunicipio(municipio.slug, true) : municipio;
+  if (!m) notFound();
+
+  // Municípios sem acompanhamento real podem ter relatos fictícios no modo de demonstração.
+  if (!m.ativo_acompanhamento && !(modo.gerados && m.total > 0)) return (
+    <>
+      <p>Ainda não acompanhamos relatos neste município</p>
+      <p className="text-texto-suave">Isso não significa ausência de problemas. Não há prazo de início de acompanhamento definido.</p>
+      <Link href={`/registrar?municipio=${m.slug}`} prefetch={false} className={CLASSE_CTA_REGISTRO}>Registrar um problema</Link>
+    </>
+  );
+
+  return (
+    <>
       <Link href={`/registrar?municipio=${m.slug}`} prefetch={false} className={CLASSE_CTA_REGISTRO}>
         Registrar um problema
       </Link>
       <AvisoMetodologico />
       <Suspense fallback={<CarregandoLista />}>
         <ListaProblemas
-          searchParams={props.searchParams}
+          searchParams={searchParams}
           base={`/municipios/${m.slug}`}
           municipioFixo={m.slug}
         />
       </Suspense>
-    </div>
+    </>
   );
 }
