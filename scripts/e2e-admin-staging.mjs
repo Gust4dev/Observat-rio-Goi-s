@@ -74,8 +74,10 @@ async function app(pathname, { method = 'GET', body, cookie = true, csrf = false
     throw new Error(`Aplicação local indisponível (${causa}).`);
   }
   guardarCookies(response);
-  const data = await response.json().catch(() => null);
-  return { response, data };
+  const copia = response.clone();
+  const data = await copia.json().catch(() => null);
+  const texto = data === null ? await response.text().catch(() => '') : '';
+  return { response, data, texto };
 }
 function chamarAppLocal(url, init) {
   return new Promise((resolve, reject) => {
@@ -483,7 +485,13 @@ async function conferirResiduosConsole(key) {
       rest(`v_atualizacoes_publicas?select=id&ocorrencia_id=eq.${id}`),
     ]);
     exigir(publicos.length === 0 && atualizacoes.length === 0, 'Relato ou atualização da fixture ainda público.');
-    exigir((await app(`/problema/${id}`, { cookie: false })).response.status === 404, 'Detalhe da fixture retirada ainda não retorna 404.');
+    const detalhe = await app(`/problema/${id}`, { cookie: false });
+    const naoEncontrado = detalhe.response.status === 404
+      || (detalhe.response.status === 200
+        && detalhe.texto.includes('Página não encontrada')
+        && detalhe.texto.includes('Não encontramos o que você procurava')
+        && !detalhe.texto.includes(ocorrencias.find(item => item.id === id)?.marcador ?? ''));
+    exigir(naoEncontrado, `Detalhe da fixture retirada ainda apresenta conteúdo público (HTTP ${detalhe.response.status}).`);
   }
   for (const { id, texto } of atualizacoesConsole) {
     const filtro = new URLSearchParams({ ocorrencia_id: `eq.${id}`, texto: `eq.${texto}` });
@@ -673,7 +681,7 @@ async function main() {
       try {
         atualizacoesRetidas = await conferirResiduosConsole(keys.secretKey);
         if (feito && atualizacoesRetidas !== 3) falhas.push('Retenção das três atualizações de histórico não comprovada.');
-      } catch { falhas.push('Visibilidade e retenção das atualizações sintéticas não comprovadas.'); }
+      } catch (error) { falhas.push(`Visibilidade e retenção das atualizações sintéticas não comprovadas${error instanceof Error ? `: ${error.message}` : '.'}`); }
     }
     if (somenteModeracaoMvp) {
       try { limpezaParticipacao = await limparParticipacaoMvp(ocorrencias, keys.secretKey); }

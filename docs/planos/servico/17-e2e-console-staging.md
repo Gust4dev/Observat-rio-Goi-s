@@ -25,3 +25,16 @@ O comando inicial executou todos os fluxos acima e retirou as duas fixtures pelo
 O pós-check SQL read-only confirmou duas ocorrências anonimizadas, **zero relatos públicos, atualizações públicas e tokens**, três atualizações sintéticas retidas (uma nota interna), nove eventos anonimizados dos relatos e três da equipe. Novos GETs no mesmo build de Production local retornaram **404 para ambos os detalhes**. Os resíduos fazem parte do histórico somente-inserção e ficam invisíveis nas superfícies públicas.
 
 Os handlers permaneceram iguais. Essa prova cobre as ações por HTTP e as projeções públicas do build local com staging. A apresentação dos controles no navegador Vercel está fora deste ensaio.
+
+## Retomada — limpeza semântica da página removida — 26/11/2026
+
+O runtime do Next pode transmitir a página `notFound()` com HTTP 200. Por isso, a asserção anterior, que aceitava exclusivamente HTTP 404, confundia o status de transporte com a visibilidade do relato. A verificação agora aceita 404 ou HTML 200 com o título e a mensagem de página não encontrada, desde que o marcador da fixture não apareça; as views públicas continuam sendo verificadas separadamente.
+
+```powershell
+$env:TURNSTILE_TEST_SECRET='1x0000000000000000000000000000000AA'
+$env:NEXT_PUBLIC_TURNSTILE_TEST_SITE_KEY='1x00000000000000000000AA'
+$env:TURNSTILE_TEST_TOKEN='XXXX.DUMMY.TOKEN.XXXX'
+npm run e2e:admin:staging -- --console-mvp
+```
+
+Resultado: `e2e=aprovado`, `perfil=console-mvp`; conflito de lote retornou 409; duas ocorrências foram moderadas e removidas; três atualizações append-only foram retidas; equipe e conta Auth temporárias foram removidas. A checagem final confirmou as ocorrências e atualizações fora das views públicas e a página de detalhe sem conteúdo da fixture. Os valores Turnstile são credenciais públicas oficiais de teste, usados somente no processo. A verificação não executou mutações em Production.
