@@ -62,9 +62,9 @@ it("devolve o mesmo 202 ao inserir ou repetir sem consultar a view pública", as
   const primeiro = await enviar();
   const retry = await enviar();
   expect(primeiro.status).toBe(202);
-  expect(await primeiro.json()).toEqual({ confirmacao });
+  expect(await primeiro.json()).toEqual({ confirmacao, nova_confirmacao: true });
   expect(retry.status).toBe(202);
-  expect(await retry.json()).toEqual({ confirmacao });
+  expect(await retry.json()).toEqual({ confirmacao, nova_confirmacao: false });
   expect(revalidateTag).toHaveBeenCalledExactlyOnceWith(`problema:${id}`, { expire: 0 });
   expect(consulta).not.toHaveBeenCalled();
 });
