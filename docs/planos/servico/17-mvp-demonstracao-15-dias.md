@@ -614,3 +614,9 @@ A jornada pública de Production e as medições de capacidade estão no [relat�
 - A Vercel criou `dpl_HweC67h8kn6qzKBmEBXqB6M8cWjN`, `READY`, com alias `observatorio-go.vercel.app`. A revisão contém a correção do runner E2E, os registros operacionais e o adendo de contrato. Os fluxos públicos de denúncia/resposta foram exercitados no alias antes do push desta revisão; o código da aplicação não mudou neste commit.
 - Os três documentos anteriormente staged mantiveram os blobs originais e ficaram fora do commit: `docs/api-contratos.md`, `docs/planos/servico/13-fechamento-go-mvp.md` e `docs/planos/servico/README.md`.
 - Esta publicação confirma a entrega e o runtime do código, mas não fecha a revisão administrativa Production dos dois itens sintéticos pendentes. Essa revisão exige sessão administrativa válida com MFA/AAL2; a página aberta na aba de teste apresentou o formulário de login. Fotos continuam desligadas até aprovação do gate jurídico/operacional.
+
+### Confirmação read-only das participações Production — 27/11/2026
+
+- Uma consulta `supabase db query --remote=acxcqtknxjiwopdtjxoc --read-only` restrita ao UUID sintético do relato retornou `denuncias_abertas=1` e `respostas_pendentes=1`. A consulta não selecionou texto, contato ou outros relatos.
+- Uma tentativa conjunta de contar também pela view `v_respostas_publicas` foi recusada pelo banco com `permission denied for function gerado_visivel`; não houve mutação. A consulta seguinte retirou a view e confirmou os dois registros pendentes diretamente pelas tabelas. A página pública recarregada não apresentou a resposta pendente.
+- A denúncia e a resposta estão persistidas, mas ainda não foram resolvidas/revisadas pela interface administrativa Production. A próxima etapa requer reabrir o console `/admin` com uma sessão autorizada que complete MFA/AAL2. A autorização não será simulada por SQL nem substituída por uma chamada com chave privilegiada.
