@@ -20,6 +20,8 @@ export function ParticipacaoRelato({ id, afeta, totalInicial }: { id: string; af
   const [ocupado, setOcupado] = useState(false);
   const [confirmado, setConfirmado] = useState(false);
   const [mensagem, setMensagem] = useState("");
+  const [confirmacaoLocal, setConfirmacaoLocal] = useState({ base: totalInicial, nova: false });
+  const total = confirmacaoLocal.base === totalInicial && confirmacaoLocal.nova ? totalInicial + 1 : totalInicial;
 
   async function enviar(rota: "afeta" | "denunciar" | "resposta", dados: Record<string, unknown>) {
     if (envioEmCurso.current || (rota === "afeta" && afetaConfirmado.current)) return;
@@ -34,11 +36,12 @@ export function ParticipacaoRelato({ id, afeta, totalInicial }: { id: string; af
       });
       if (resposta.status === 202) {
         if (rota === "afeta") {
-          const corpo = await resposta.json().catch(() => null) as { confirmacao?: unknown } | null;
-          if (typeof corpo?.confirmacao !== "string" || !corpo.confirmacao.trim()) {
+          const corpo = await resposta.json().catch(() => null) as { confirmacao?: unknown; nova_confirmacao?: unknown } | null;
+          if (typeof corpo?.confirmacao !== "string" || !corpo.confirmacao.trim() || typeof corpo.nova_confirmacao !== "boolean") {
             setMensagem("Não foi possível confirmar o envio. Tente novamente com os mesmos dados.");
             return;
           }
+          if (corpo.nova_confirmacao) setConfirmacaoLocal({ base: totalInicial, nova: true });
           afetaConfirmado.current = true;
           setConfirmado(true);
           setMensagem("Confirmação recebida.");
@@ -67,7 +70,7 @@ export function ParticipacaoRelato({ id, afeta, totalInicial }: { id: string; af
   }
 
   return <>
-    <ContagemAfeta total={totalInicial} />
+    <ContagemAfeta total={total} />
     <div className="space-y-4 rounded-lg border border-borda p-4">
     {afeta && <button type="button" disabled={ocupado || confirmado} className="min-h-12 underline" onClick={() => void enviar("afeta", {})}>Também me afeta</button>}
     <details>

@@ -101,6 +101,6 @@ export async function confirmarAfeta(request: Request) {
     const chave = hmacSha256(config.hmacSegredo, JSON.stringify(["confirmacao-v1", entrada.ocorrencia_id, origem]));
     const inserida = await rpc("registrar_confirmacao", { p_ocorrencia_id: entrada.ocorrencia_id, p_chave_hash: bytea(chave) }, z.boolean(), config);
     if (inserida) revalidateTag(`problema:${entrada.ocorrencia_id}`, { expire: 0 });
-    return concluir(respostaPrivada({ confirmacao: "Confirmação recebida." }, 202), logger, inicio);
+    return concluir(respostaPrivada({ confirmacao: "Confirmação recebida.", nova_confirmacao: inserida }, 202), logger, inicio);
   } catch (erro) { return concluir(falha(erro), logger, inicio); }
 }

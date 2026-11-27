@@ -171,7 +171,7 @@ it.each(["", "false"])("afeta permanece fechado quando a flag é %s", async flag
   vi.stubEnv("AFETA_HABILITADO", flag); expect((await afeta(request({ ocorrencia_id: id, turnstile: "teste" }))).status).toBe(503); expect(chamadas).toHaveLength(0);
 });
 
-it("usa uma chave de confirmação estável sem diferenciar repetição", async () => {
+it("usa uma chave de confirmação estável e informa se uma repetição criou nova participação", async () => {
   vi.stubEnv("AFETA_HABILITADO", "true");
   vi.stubEnv("LIMITE_AFETA_MAXIMO", "5");
   const original = globalThis.fetch;
@@ -184,8 +184,12 @@ it("usa uma chave de confirmação estável sem diferenciar repetição", async 
     return original(input, init);
   });
   const corpo = { ocorrencia_id: id, turnstile: "teste" };
-  expect((await afeta(request(corpo))).status).toBe(202);
-  expect((await afeta(request(corpo))).status).toBe(202);
+  const primeira = await afeta(request(corpo));
+  const repetida = await afeta(request(corpo));
+  expect(primeira.status).toBe(202);
+  expect(await primeira.json()).toEqual({ confirmacao: "Confirmação recebida.", nova_confirmacao: false });
+  expect(repetida.status).toBe(202);
+  expect(await repetida.json()).toEqual({ confirmacao: "Confirmação recebida.", nova_confirmacao: false });
   expect(chaves).toHaveLength(2);
   expect(chaves[0]).toBe(chaves[1]);
   expect(cache.revalidateTag).not.toHaveBeenCalled();
@@ -196,6 +200,7 @@ it("expira somente o cache do relato após inserir a confirmação", async () =>
   vi.stubEnv("LIMITE_AFETA_MAXIMO", "5");
   const respostaApi = await afeta(request({ ocorrencia_id: id, turnstile: "teste" }));
   expect(respostaApi.status).toBe(202);
+  expect(await respostaApi.json()).toEqual({ confirmacao: "Confirmação recebida.", nova_confirmacao: true });
   expect(cache.revalidateTag).toHaveBeenCalledExactlyOnceWith(`problema:${id}`, { expire: 0 });
 });
 

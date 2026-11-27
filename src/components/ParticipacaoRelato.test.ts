@@ -12,7 +12,9 @@ vi.mock("react", async importar => ({
   useState<T>(inicial: T) {
     const posicao = hooks.posicao++;
     if (!(posicao in hooks.slots)) hooks.slots[posicao] = inicial;
-    return [hooks.slots[posicao], (valor: T) => { hooks.slots[posicao] = valor; }];
+    return [hooks.slots[posicao], (valor: T | ((anterior: T) => T)) => {
+      hooks.slots[posicao] = typeof valor === "function" ? (valor as (anterior: T) => T)(hooks.slots[posicao] as T) : valor;
+    }];
   },
   useRef<T>(inicial: T) {
     const posicao = hooks.posicao++;
@@ -48,7 +50,7 @@ describe("Contagem de participação no detalhe", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("confirma o envio sem inventar incremento e exibe o total canônico após refresh", async () => {
+  it("atualiza o total imediatamente somente quando o servidor inseriu uma nova confirmação", async () => {
     const resposta = Promise.withResolvers<Response>();
     const post = vi.fn(() => resposta.promise);
     vi.stubGlobal("fetch", post);
@@ -59,9 +61,9 @@ describe("Contagem de participação no detalhe", () => {
     inicial.clicar();
     expect(post).toHaveBeenCalledTimes(1);
     expect(renderizar(3).desabilitado).toBe(true);
-    resposta.resolve(Response.json({ confirmacao: "Confirmação recebida." }, { status: 202 }));
+    resposta.resolve(Response.json({ confirmacao: "Confirmação recebida.", nova_confirmacao: true }, { status: 202 }));
     await vi.waitFor(() => expect(renderizar(3).html).toContain("Confirmação recebida."));
-    expect(renderizar(3).html).toContain("Também me afeta: 3.");
+    expect(renderizar(3).html).toContain("Também me afeta: 4.");
     expect(hooks.refresh).toHaveBeenCalledTimes(1);
 
     inicial.clicar();
@@ -70,10 +72,19 @@ describe("Contagem de participação no detalhe", () => {
     expect(renderizar(4).html).toContain("Também me afeta: 4.");
   });
 
+  it("não incrementa o total quando a confirmação da origem já existia", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(
+      { confirmacao: "Confirmação recebida.", nova_confirmacao: false }, { status: 202 },
+    )));
+    renderizar(7).clicar();
+    await vi.waitFor(() => expect(renderizar(7).html).toContain("Confirmação recebida."));
+    expect(renderizar(7).html).toContain("Também me afeta: 7.");
+  });
+
   it("permite repetir após falha e mantém o total se a confirmação já foi registrada", async () => {
     const post = vi.fn()
       .mockRejectedValueOnce(new Error("resposta perdida"))
-      .mockResolvedValueOnce(Response.json({ confirmacao: "Confirmação recebida." }, { status: 202 }));
+      .mockResolvedValueOnce(Response.json({ confirmacao: "Confirmação recebida.", nova_confirmacao: false }, { status: 202 }));
     vi.stubGlobal("fetch", post);
 
     renderizar(7).clicar();
@@ -89,7 +100,7 @@ describe("Contagem de participação no detalhe", () => {
   it("permite repetir se a resposta 202 não comprovar o resultado", async () => {
     const post = vi.fn()
       .mockResolvedValueOnce(Response.json({}, { status: 202 }))
-      .mockResolvedValueOnce(Response.json({ confirmacao: "Confirmação recebida." }, { status: 202 }));
+      .mockResolvedValueOnce(Response.json({ confirmacao: "Confirmação recebida.", nova_confirmacao: false }, { status: 202 }));
     vi.stubGlobal("fetch", post);
 
     renderizar(7).clicar();
